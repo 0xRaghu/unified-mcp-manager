@@ -20,6 +20,8 @@ This fragmentation makes it difficult to:
 
 ## ✨ Solution
 
+![MCP Manager Interface](public/Screenshot.jpg)
+
 MCP Manager provides a centralized web UI where you can:
 
 - ✅ **Add MCPs** through an intuitive form interface
