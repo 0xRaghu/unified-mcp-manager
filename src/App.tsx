@@ -10,15 +10,12 @@ import {
   Filter, 
   RefreshCw,
   Copy,
-  Grid3X3,
-  List,
   Wifi,
   WifiOff,
   AlertCircle
 } from 'lucide-react';
 import { useMCPStore } from './stores/mcpStore';
 import type { MCP } from './types';
-import { Card, CardContent } from './components/ui/card';
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
 import { Input } from './components/ui/input';
@@ -54,7 +51,6 @@ function App() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingMCP, setEditingMCP] = useState<MCP | undefined>(undefined);
   const [testingMCP, setTestingMCP] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'connected' | 'disconnected' | 'testing'>>({});
   const { showToast } = useToast();
   
@@ -298,24 +294,6 @@ function App() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <div className="flex border rounded-md">
-              <Button 
-                variant={viewMode === 'grid' ? 'default' : 'ghost'} 
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className="rounded-r-none"
-              >
-                <Grid3X3 className="h-4 w-4" />
-              </Button>
-              <Button 
-                variant={viewMode === 'list' ? 'default' : 'ghost'} 
-                size="sm"
-                onClick={() => setViewMode('list')}
-                className="rounded-l-none"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleExportJSON}>
@@ -356,109 +334,6 @@ function App() {
             <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No MCPs found</h3>
             <p className="text-gray-600">Try adjusting your search or filters.</p>
-          </div>
-        ) : viewMode === 'grid' ? (
-          // MCP Grid
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <AnimatePresence>
-              {filteredMCPs.map((mcp) => {
-                const connectionStatus = connectionStatuses[mcp.id];
-                const isConnected = connectionStatus === 'connected';
-                const isConnecting = connectionStatus === 'testing';
-                const isDisconnected = connectionStatus === 'disconnected';
-                
-                return (
-                  <motion.div
-                    key={mcp.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.3 }}
-                    whileHover={{ scale: 1.02 }}
-                  >
-                    <Card className="hover:shadow-lg transition-shadow duration-200">
-                      <CardContent className="p-4">
-                        <div className="space-y-4">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-blue-50 rounded-lg">
-                                <Server className="h-5 w-5 text-blue-600" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h3 className="font-medium text-gray-900 truncate">{mcp.name}</h3>
-                                <p className="text-sm text-gray-600 truncate">
-                                  {mcp.description || 'No description'}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="flex items-center gap-2">
-                                <Switch
-                                  checked={!mcp.disabled}
-                                  onCheckedChange={() => handleToggleMCP(mcp)}
-                                  className="h-4 w-7"
-                                />
-                              </div>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleEditMCP(mcp)}>Edit</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleDuplicateMCP(mcp)}>Duplicate</DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    onClick={() => handleTestConnection(mcp)}
-                                    disabled={testingMCP === mcp.id}
-                                  >
-                                    {testingMCP === mcp.id ? 'Testing...' : 'Test Connection'}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleDeleteMCP(mcp)} className="text-red-600">Delete</DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              {isConnecting ? (
-                                <Badge variant="outline" className="text-yellow-600">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  Testing...
-                                </Badge>
-                              ) : !mcp.disabled ? (
-                                <Badge 
-                                  variant="outline" 
-                                  className={isConnected ? "text-green-600" : isDisconnected ? "text-red-600" : "text-gray-500"}
-                                >
-                                  {isConnected ? <Wifi className="h-3 w-3 mr-1" /> : <WifiOff className="h-3 w-3 mr-1" />}
-                                  {isConnected ? 'Connected' : isDisconnected ? 'Disconnected' : 'Unknown'}
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-gray-500">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  Disabled
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="text-sm">
-                            <span className="text-gray-500">Type: </span>
-                            <span className="font-semibold capitalize">{mcp.type || 'stdio'}</span>
-                          </div>
-
-                          <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded font-mono overflow-x-auto whitespace-nowrap">
-                            {mcp.command} {mcp.args.join(' ')}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
           </div>
         ) : (
           // MCP Table View
