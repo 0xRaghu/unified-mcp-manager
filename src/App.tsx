@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, 
@@ -56,7 +56,7 @@ function App() {
   
   useEffect(() => {
     loadData();
-  }, [loadData]);
+  }, []); // Remove loadData dependency to prevent infinite re-renders
 
   // Test connections for all enabled MCPs on app start
   useEffect(() => {
@@ -83,10 +83,15 @@ function App() {
 
   useEffect(() => {
     setFilters({ search: searchQuery });
-  }, [searchQuery, setFilters]);
+  }, [searchQuery]); // Remove setFilters dependency to prevent infinite re-renders
 
-  const filteredMCPs = getFilteredMCPs();
-  const activeMCPs = mcps.filter(mcp => !mcp.disabled).length;
+  const filteredMCPs = useMemo(() => {
+    console.log('App: calculating filtered MCPs, mcps.length:', mcps.length);
+    const result = getFilteredMCPs();
+    console.log('App: filtered result:', result);
+    return result;
+  }, [getFilteredMCPs, mcps]);
+  const activeMCPs = useMemo(() => mcps.filter(mcp => !mcp.disabled).length, [mcps]);
 
   const handleExportJSON = async () => {
     const exported = exportMCPs();

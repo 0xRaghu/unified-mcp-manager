@@ -102,6 +102,32 @@ export interface ImportResult {
   errors: string[];
 }
 
+// Storage adapter interface
+export interface StorageAdapter {
+  // MCP operations
+  getMCPs(): Promise<MCP[]>;
+  saveMCPs(mcps: MCP[]): Promise<void>;
+  
+  // Profile operations
+  getProfiles(): Profile[];
+  saveProfiles(profiles: Profile[]): void;
+  
+  // Settings operations
+  getSettings(): AppSettings;
+  saveSettings(settings: AppSettings): void;
+  
+  // Backup operations
+  getBackups(): StorageBackup[];
+  saveBackups(backups: StorageBackup[]): void;
+  createBackup(description?: string): Promise<StorageBackup>;
+  restoreFromBackup(backupId: string): Promise<void>;
+  
+  // Utility operations
+  clearAll(): void;
+  getStorageInfo(): { used: number; available: number };
+  getStorageDir?(): string; // Optional for file-based storage
+}
+
 // Default categories
 export const DEFAULT_CATEGORIES = [
   'AI & Language',

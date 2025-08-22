@@ -1,0 +1,46 @@
+# Development files
+src/
+tests/
+node_modules/
+.git/
+.github/
+
+# Config files
+.env*
+.vscode/
+.idea/
+
+# Build artifacts
+*.log
+*.tmp
+*.temp
+
+# Test files
+**/*.test.*
+**/*.spec.*
+playwright-report/
+test-results/
+
+# Development configs
+vite.config.ts
+vitest.config.ts
+playwright.config.ts
+tailwind.config.js
+postcss.config.js
+
+# TypeScript source
+tsconfig.json
+tsconfig.*.json
+
+# Documentation (except README.md)
+docs/
+*.md
+!README.md
+
+# Misc
+.DS_Store
+Thumbs.db
+
+# Only include built files
+!dist/
+!lib/

@@ -1,5 +1,6 @@
 /**
  * Storage utilities for persisting MCP data with encryption support
+ * Now uses storage adapters to support both browser and server environments
  */
 
 import { encryptData, decryptData, isEncryptionSupported } from './crypto';
@@ -8,27 +9,144 @@ import type {
   Profile, 
   AppSettings, 
   StorageData, 
-  StorageBackup
+  StorageBackup,
+  StorageAdapter
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 
-const STORAGE_KEYS = {
-  MCPS: 'mcp-manager-mcps',
-  PROFILES: 'mcp-manager-profiles',
-  SETTINGS: 'mcp-manager-settings',
-  BACKUPS: 'mcp-manager-backups',
-  ENCRYPTION_KEY: 'mcp-manager-key'
-} as const;
+
+// Browser-compatible storage adapters
+class ApiStorageAdapter implements StorageAdapter {
+  private baseUrl: string;
+
+  constructor(baseUrl: string = '') {
+    this.baseUrl = baseUrl;
+  }
+
+  private async apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api${endpoint}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options?.headers
+        },
+        ...options
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Network error');
+    }
+  }
+
+  async getMCPs(): Promise<MCP[]> {
+    console.log('ApiStorageAdapter.getMCPs() called');
+    const mcps = await this.apiCall<MCP[]>('/mcps');
+    console.log('API returned:', mcps);
+    const result = mcps.map(mcp => ({
+      ...mcp,
+      lastUsed: mcp.lastUsed ? new Date(mcp.lastUsed) : new Date(),
+    }));
+    console.log('Processed result:', result);
+    return result;
+  }
+
+  async saveMCPs(mcps: MCP[]): Promise<void> {
+    await this.apiCall('/mcps', {
+      method: 'POST',
+      body: JSON.stringify(mcps)
+    });
+  }
+
+  getProfiles(): Profile[] {
+    return [];
+  }
+
+  saveProfiles(profiles: Profile[]): void {
+    // Fire and forget
+    this.apiCall('/profiles', {
+      method: 'POST',
+      body: JSON.stringify(profiles)
+    }).catch(console.error);
+  }
+
+  getSettings(): AppSettings {
+    return DEFAULT_SETTINGS;
+  }
+
+  saveSettings(settings: AppSettings): void {
+    // Fire and forget
+    this.apiCall('/settings', {
+      method: 'POST',
+      body: JSON.stringify(settings)
+    }).catch(console.error);
+  }
+
+  getBackups(): StorageBackup[] {
+    return [];
+  }
+
+  saveBackups(backups: StorageBackup[]): void {
+    // Fire and forget
+    this.apiCall('/backups', {
+      method: 'POST',
+      body: JSON.stringify(backups)
+    }).catch(console.error);
+  }
+
+  async createBackup(description?: string): Promise<StorageBackup> {
+    const backup = await this.apiCall<StorageBackup>('/backups', {
+      method: 'POST',
+      body: JSON.stringify({ description })
+    });
+    
+    return {
+      ...backup,
+      timestamp: new Date(backup.timestamp),
+      data: {
+        ...backup.data,
+        profiles: backup.data.profiles?.map((profile: any) => ({
+          ...profile,
+          createdAt: new Date(profile.createdAt),
+          updatedAt: new Date(profile.updatedAt)
+        })) || []
+      }
+    };
+  }
+
+  async restoreFromBackup(backupId: string): Promise<void> {
+    await this.apiCall(`/backups/${backupId}/restore`, {
+      method: 'POST'
+    });
+  }
+
+  clearAll(): void {
+    this.apiCall('/storage/clear', {
+      method: 'POST'
+    }).catch(console.error);
+  }
+
+  getStorageInfo(): { used: number; available: number } {
+    return { used: 0, available: 0 };
+  }
+}
+
 
 class StorageManager {
   private encryptionPassword: string | null = null;
+  private adapter: StorageAdapter;
 
   constructor() {
-    // Check if we have a stored encryption key
-    const storedKey = localStorage.getItem(STORAGE_KEYS.ENCRYPTION_KEY);
-    if (storedKey) {
-      this.encryptionPassword = storedKey;
-    }
+    // Always use API adapter since we're always running with a server
+    this.adapter = new ApiStorageAdapter();
   }
 
   /**
@@ -36,7 +154,6 @@ class StorageManager {
    */
   setEncryptionPassword(password: string): void {
     this.encryptionPassword = password;
-    localStorage.setItem(STORAGE_KEYS.ENCRYPTION_KEY, password);
   }
 
   /**
@@ -44,7 +161,6 @@ class StorageManager {
    */
   clearEncryptionPassword(): void {
     this.encryptionPassword = null;
-    localStorage.removeItem(STORAGE_KEYS.ENCRYPTION_KEY);
   }
 
   /**
@@ -119,10 +235,7 @@ class StorageManager {
    */
   async getMCPs(): Promise<MCP[]> {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.MCPS);
-      if (!stored) return [];
-      
-      const mcps: MCP[] = JSON.parse(stored);
+      const mcps = await this.adapter.getMCPs();
       
       // Decrypt sensitive data if encryption is enabled
       if (this.encryptionPassword && isEncryptionSupported()) {
@@ -153,7 +266,7 @@ class StorageManager {
         );
       }
       
-      localStorage.setItem(STORAGE_KEYS.MCPS, JSON.stringify(mcpsToStore));
+      await this.adapter.saveMCPs(mcpsToStore);
     } catch (error) {
       console.error('Failed to save MCPs to storage:', error);
       throw new Error('Failed to save MCP data');
@@ -165,16 +278,7 @@ class StorageManager {
    */
   getProfiles(): Profile[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.PROFILES);
-      if (!stored) return [];
-      
-      const profiles = JSON.parse(stored);
-      // Convert date strings back to Date objects
-      return profiles.map((profile: any) => ({
-        ...profile,
-        createdAt: new Date(profile.createdAt),
-        updatedAt: new Date(profile.updatedAt)
-      }));
+      return this.adapter.getProfiles();
     } catch (error) {
       console.error('Failed to get profiles from storage:', error);
       return [];
@@ -186,7 +290,7 @@ class StorageManager {
    */
   saveProfiles(profiles: Profile[]): void {
     try {
-      localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(profiles));
+      this.adapter.saveProfiles(profiles);
     } catch (error) {
       console.error('Failed to save profiles to storage:', error);
       throw new Error('Failed to save profile data');
@@ -198,12 +302,7 @@ class StorageManager {
    */
   getSettings(): AppSettings {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      if (!stored) return DEFAULT_SETTINGS;
-      
-      const settings = JSON.parse(stored);
-      // Merge with defaults to ensure all properties exist
-      return { ...DEFAULT_SETTINGS, ...settings };
+      return this.adapter.getSettings();
     } catch (error) {
       console.error('Failed to get settings from storage:', error);
       return DEFAULT_SETTINGS;
@@ -215,7 +314,7 @@ class StorageManager {
    */
   saveSettings(settings: AppSettings): void {
     try {
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+      this.adapter.saveSettings(settings);
     } catch (error) {
       console.error('Failed to save settings to storage:', error);
       throw new Error('Failed to save settings');
@@ -227,23 +326,7 @@ class StorageManager {
    */
   getBackups(): StorageBackup[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.BACKUPS);
-      if (!stored) return [];
-      
-      const backups = JSON.parse(stored);
-      // Convert date strings back to Date objects
-      return backups.map((backup: any) => ({
-        ...backup,
-        timestamp: new Date(backup.timestamp),
-        data: {
-          ...backup.data,
-          profiles: backup.data.profiles?.map((profile: any) => ({
-            ...profile,
-            createdAt: new Date(profile.createdAt),
-            updatedAt: new Date(profile.updatedAt)
-          })) || []
-        }
-      }));
+      return this.adapter.getBackups();
     } catch (error) {
       console.error('Failed to get backups from storage:', error);
       return [];
@@ -255,7 +338,7 @@ class StorageManager {
    */
   saveBackups(backups: StorageBackup[]): void {
     try {
-      localStorage.setItem(STORAGE_KEYS.BACKUPS, JSON.stringify(backups));
+      this.adapter.saveBackups(backups);
     } catch (error) {
       console.error('Failed to save backups to storage:', error);
       throw new Error('Failed to save backup data');
@@ -267,22 +350,7 @@ class StorageManager {
    */
   async createBackup(description?: string): Promise<StorageBackup> {
     try {
-      const mcps = await this.getMCPs();
-      const profiles = this.getProfiles();
-      const settings = this.getSettings();
-      
-      const backup: StorageBackup = {
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        description: description || `Backup ${new Date().toLocaleString()}`,
-        data: { mcps, profiles, settings }
-      };
-
-      const existingBackups = this.getBackups();
-      const allBackups = [backup, ...existingBackups].slice(0, 10); // Keep only 10 backups
-      this.saveBackups(allBackups);
-      
-      return backup;
+      return await this.adapter.createBackup(description);
     } catch (error) {
       console.error('Failed to create backup:', error);
       throw new Error('Failed to create backup');
@@ -294,16 +362,7 @@ class StorageManager {
    */
   async restoreFromBackup(backupId: string): Promise<void> {
     try {
-      const backups = this.getBackups();
-      const backup = backups.find(b => b.id === backupId);
-      
-      if (!backup) {
-        throw new Error('Backup not found');
-      }
-
-      await this.saveMCPs(backup.data.mcps);
-      this.saveProfiles(backup.data.profiles);
-      this.saveSettings(backup.data.settings);
+      await this.adapter.restoreFromBackup(backupId);
     } catch (error) {
       console.error('Failed to restore from backup:', error);
       throw new Error('Failed to restore from backup');
@@ -315,9 +374,7 @@ class StorageManager {
    */
   clearAll(): void {
     try {
-      Object.values(STORAGE_KEYS).forEach(key => {
-        localStorage.removeItem(key);
-      });
+      this.adapter.clearAll();
     } catch (error) {
       console.error('Failed to clear storage:', error);
       throw new Error('Failed to clear all data');
@@ -329,20 +386,7 @@ class StorageManager {
    */
   getStorageInfo(): { used: number; available: number } {
     try {
-      let used = 0;
-      Object.values(STORAGE_KEYS).forEach(key => {
-        const item = localStorage.getItem(key);
-        if (item) {
-          used += new Blob([item]).size;
-        }
-      });
-
-      // Rough estimate of available space (browsers typically allow 5-10MB)
-      const estimated_total = 5 * 1024 * 1024; // 5MB
-      return {
-        used,
-        available: Math.max(0, estimated_total - used)
-      };
+      return this.adapter.getStorageInfo();
     } catch (error) {
       return { used: 0, available: 0 };
     }
