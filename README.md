@@ -40,7 +40,7 @@ MCP Manager provides a centralized web UI where you can:
 
 ```bash
 # Install globally
-npm install -g @0xraghu/unified-mcp-manager
+npm install -g unified-mcp-manager
 
 # Run the app (opens automatically in browser)
 mcp-manager

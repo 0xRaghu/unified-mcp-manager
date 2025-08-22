@@ -1,5 +1,5 @@
 {
-  "name": "@0xraghu/unified-mcp-manager",
+  "name": "unified-mcp-manager",
   "version": "1.0.0",
   "description": "Centralized MCP configuration management tool for AI coding agents",
   "type": "module",
@@ -13,7 +13,7 @@
     "dist/**/*",
     "lib/**/*",
     "README.md",
-    "LICENSE"
+    "LICENSE.md"
   ],
   "engines": {
     "node": ">=18.0.0",
