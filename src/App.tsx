@@ -462,7 +462,10 @@ function App() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-xs text-gray-500 font-mono truncate max-w-xs">
-                              {mcp.command} {mcp.args.join(' ')}
+                              {mcp.type === 'http' || mcp.type === 'sse' 
+                                ? mcp.url 
+                                : `${mcp.command || ''} ${mcp.args?.join(' ') || ''}`
+                              }
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
