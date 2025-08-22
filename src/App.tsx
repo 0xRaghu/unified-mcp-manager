@@ -45,7 +45,8 @@ function App() {
     updateMCP,
     deleteMCP,
     duplicateMCP,
-    toggleMCP
+    toggleMCP,
+    bulkToggleMCPs
   } = useMCPStore();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -179,6 +180,18 @@ function App() {
     showToast({
       title: `MCP ${mcp.disabled ? 'enabled' : 'disabled'}`,
       description: `${mcp.name} has been ${mcp.disabled ? 'enabled' : 'disabled'}`,
+      type: 'success',
+      duration: 3000
+    });
+  };
+
+  const handleToggleAllMCPs = async (enabled: boolean) => {
+    const allMCPIds = filteredMCPs.map(mcp => mcp.id);
+    await bulkToggleMCPs(allMCPIds, enabled);
+    
+    showToast({
+      title: `All MCPs ${enabled ? 'enabled' : 'disabled'}`,
+      description: `${filteredMCPs.length} MCPs have been ${enabled ? 'enabled' : 'disabled'}`,
       type: 'success',
       duration: 3000
     });
@@ -443,6 +456,22 @@ function App() {
         ) : (
           // MCP Table View
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            {/* Enable/Disable All Toggle */}
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm font-medium text-gray-700">Enable/Disable All</span>
+                  <Switch
+                    checked={filteredMCPs.length > 0 && filteredMCPs.every(mcp => !mcp.disabled)}
+                    onCheckedChange={(enabled) => handleToggleAllMCPs(enabled)}
+                    className="h-5 w-9"
+                  />
+                </div>
+                <div className="text-sm text-gray-500">
+                  {filteredMCPs.filter(mcp => !mcp.disabled).length} of {filteredMCPs.length} enabled
+                </div>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
