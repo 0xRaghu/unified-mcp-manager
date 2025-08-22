@@ -2,12 +2,12 @@
 export interface MCP {
   id: string;
   name: string;
-  command: string;
-  args: string[];
+  command?: string; // Optional for HTTP/SSE types
+  args?: string[];
   env?: Record<string, string>;
   disabled?: boolean;
   alwaysAllow?: string[];
-  type?: 'stdio' | 'http' | 'sse';
+  type: 'stdio' | 'http' | 'sse'; // Required field
   category: string;
   description?: string;
   version?: string;
@@ -15,6 +15,9 @@ export interface MCP {
   usageCount: number;
   tags: string[];
   source?: string;
+  // HTTP/SSE specific fields
+  url?: string; // Required for HTTP/SSE types
+  headers?: Record<string, string>; // Optional headers for HTTP/SSE
 }
 
 // Profile for saving MCP combinations
@@ -61,12 +64,15 @@ export interface MCPExportFormat {
 }
 
 export interface MCPServerConfig {
-  command: string;
-  args: string[];
+  command?: string; // Optional for HTTP/SSE types
+  args?: string[];
   env?: Record<string, string>;
   disabled?: boolean;
   alwaysAllow?: string[];
   type?: 'stdio' | 'http' | 'sse';
+  // HTTP/SSE specific fields
+  url?: string; // Used for HTTP/SSE servers
+  headers?: Record<string, string>; // Optional headers for HTTP/SSE
 }
 
 // UI state types
@@ -85,13 +91,15 @@ export interface BulkActions {
 // Form types
 export interface MCPFormData {
   name: string;
-  command: string;
+  command?: string; // Optional for HTTP/SSE types
   args: string[];
   env: Array<{ key: string; value: string }>;
   category: string;
   description: string;
   tags: string[];
   type: 'stdio' | 'http' | 'sse';
+  url?: string; // For HTTP/SSE types
+  headers: Array<{ key: string; value: string }>; // For HTTP/SSE headers
 }
 
 // Import/Export types

@@ -1,14 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 import { testMCPConnection } from '../../src/lib/mcpTester';
 import type { MCP } from '../../src/types';
 
 describe('MCP Tester', () => {
-  it('should fail for MCP without command', async () => {
+  test('should fail for MCP without command', async () => {
     const mcp: MCP = {
       id: '1',
       name: 'Invalid MCP',
       command: '',
       args: [],
+      type: 'stdio', // Added required type field
       category: 'test',
       usageCount: 0,
       tags: []
@@ -18,16 +19,17 @@ describe('MCP Tester', () => {
     
     expect(result.success).toBe(false);
     expect(result.message).toBe('Invalid command');
-    expect(result.error).toBe('Command is required');
+    expect(result.error).toBe('Command is required for stdio servers');
   });
 
-  it('should test GitHub MCP with token', async () => {
+  test('should test GitHub MCP with token', async () => {
     const mcp: MCP = {
       id: '1',
       name: 'GitHub MCP',
       command: 'npx server-github',
       args: ['--token'],
-      env: { GITHUB_TOKEN: 'test-token' },
+      type: 'stdio',
+      env: { GITHUB_PERSONAL_ACCESS_TOKEN: 'test-token' },
       category: 'git',
       usageCount: 0,
       tags: []
@@ -40,12 +42,13 @@ describe('MCP Tester', () => {
     expect(result.duration).toBeGreaterThan(0);
   });
 
-  it('should fail GitHub MCP without token', async () => {
+  test('should fail GitHub MCP without token', async () => {
     const mcp: MCP = {
       id: '1', 
       name: 'GitHub MCP',
       command: 'npx server-github',
       args: [],
+      type: 'stdio',
       category: 'git',
       usageCount: 0,
       tags: []
@@ -55,15 +58,16 @@ describe('MCP Tester', () => {
     
     expect(result.success).toBe(false);
     expect(result.message).toBe('GitHub token required');
-    expect(result.error).toBe('GITHUB_TOKEN environment variable is required');
+    expect(result.error).toBe('GITHUB_PERSONAL_ACCESS_TOKEN environment variable is required');
   });
 
-  it('should test filesystem MCP successfully', async () => {
+  test('should test filesystem MCP successfully', async () => {
     const mcp: MCP = {
       id: '1',
       name: 'Filesystem MCP', 
       command: 'npx server-filesystem',
       args: ['/path/to/files'],
+      type: 'stdio',
       category: 'file',
       usageCount: 0,
       tags: []
@@ -75,12 +79,13 @@ describe('MCP Tester', () => {
     expect(result.message).toBe('Filesystem MCP is ready');
   });
 
-  it('should handle generic MCP connections', async () => {
+  test('should handle generic MCP connections', async () => {
     const mcp: MCP = {
       id: '1',
       name: 'Generic MCP',
       command: 'npx some-other-server', 
       args: [],
+      type: 'stdio',
       category: 'other',
       usageCount: 0,
       tags: []
