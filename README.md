@@ -346,7 +346,6 @@ localStorage.setItem('mcp-debug', 'true')
 - **Categorization**: Organize MCPs into categories (Development, Security, Data, etc.)
 - **Dark Mode**: Enhanced dark theme with system preference detection
 - **Bulk Import**: Add multiple MCP servers at once via JSON file upload
-- **Export Formats**: Support for YAML and other configuration formats
 - **Backup & Sync**: Cloud backup and synchronization across devices
 - **Copy JSON**: Copy the JSON configuration of individual mcps to clipboard for easy pasting into project `.mcp.json` files
 - **Enable or Disable All**: Enable or disable all MCPs with a single toggle
