@@ -302,7 +302,7 @@ rm *.tgz
 |-------|----------------|--------|---------|
 | Claude Code | `~/.claude/.mcp.json` | JSON | ✅ Full Support |
 | Gemini CLI | `~/.gemini/settings.json` | JSON | ✅ Full Support |
-| Crush | `~/.crush/mcps.yaml` | YAML | 🔄 Planned |
+| Crush | `~/.crush/mcps.yaml` | YAML | ✅ Full Support |
 | OpenCode | `~/.opencode/config.json` | JSON | ✅ Full Support |
 
 ### Popular MCP Servers
