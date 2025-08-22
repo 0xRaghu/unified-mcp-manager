@@ -60,7 +60,7 @@ cd unified-mcp-manager
 # Install dependencies
 bun install
 
-# Start development server (browser storage)
+# Start development server (uses file storage)
 bun run dev
 
 # Build npm package
@@ -69,6 +69,8 @@ bun run build
 # Test built package locally
 ./dist/cli.js --port 3001
 ```
+
+> **📁 Storage Location:** Both development and production modes now use the same file-based storage in `~/.unified-mcp-manager/`. This means MCPs added in production mode will be visible in development mode and vice versa.
 
 ## 🖥️ Usage
 
@@ -117,7 +119,7 @@ The exported format is compatible with all major AI coding agents:
 - **Frontend**: React 19 + TypeScript
 - **Styling**: TailwindCSS v4 + shadcn/ui
 - **State Management**: Zustand
-- **Storage**: File-based storage in `~/.unified-mcp-manager/` (npm package) or LocalStorage (dev mode)
+- **Storage**: File-based storage in `~/.unified-mcp-manager/` (both dev and production)
 - **Server**: Bun.serve() with API endpoints
 - **Animations**: Framer Motion
 - **Testing**: Playwright (E2E) + Vitest (Unit)
@@ -148,10 +150,10 @@ The exported format is compatible with all major AI coding agents:
 ### Key Features
 
 #### 🔐 Secure Storage
-- **NPM Package**: File-based storage in `~/.unified-mcp-manager/`
-- **Development**: Browser localStorage with Web Crypto API encryption
-- AES-GCM encryption with random salts for sensitive data
-- Cross-browser persistence when using npm package
+- **File-based storage** in `~/.unified-mcp-manager/` for both development and production
+- **Cross-session persistence** - data survives browser restarts and computer reboots
+- **AES-GCM encryption** with random salts for sensitive environment variables
+- **Unified storage location** - same MCPs visible in dev and production modes
 
 #### 🎨 Modern UI
 - Responsive design (mobile, tablet, desktop)

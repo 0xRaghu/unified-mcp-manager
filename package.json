@@ -20,7 +20,7 @@
     "bun": ">=1.0.0"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "bun index.ts --watch",
     "build": "bun run build-fixed.js",
     "build:complex": "bun run build.js",
     "build:vite": "vite build",

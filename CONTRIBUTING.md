@@ -27,14 +27,19 @@ Thank you for your interest in contributing to MCP Manager! This document provid
    ```bash
    bun run dev
    ```
-   Opens at `http://localhost:5173` with browser storage
+   Opens at `http://localhost:3000` with file-based storage
 
 4. **Test Built Package Locally**
    ```bash
    bun run build
    ./dist/cli.js --port 3001
    ```
-   Uses file-based storage in `~/.unified-mcp-manager/`
+   Uses the same file-based storage in `~/.unified-mcp-manager/`
+
+> **📁 Storage Consistency:** Both development (`bun run dev`) and production modes now use the same file-based storage location at `~/.unified-mcp-manager/`. This means:
+> - MCPs added in production mode will be visible in development mode
+> - Changes made during development persist when running the built package
+> - No need to re-add MCPs when switching between dev and production modes
 
 ## 🏗️ Project Architecture
 
@@ -63,11 +68,42 @@ Thank you for your interest in contributing to MCP Manager! This document provid
 
 ## 🔧 Development Workflow
 
+### Storage Architecture
+
+The MCP Manager uses a unified storage system for both development and production modes:
+
+#### File-based Storage (`~/.unified-mcp-manager/`)
+- **Development server** (`bun run dev`): Uses file storage via API endpoints
+- **Production CLI** (`./dist/cli.js`): Uses file storage directly
+- **Storage location**: `~/.unified-mcp-manager/` directory in user's home folder
+
+#### Storage Files
+- `mcps.json` - MCP server configurations
+- `profiles.json` - User profiles (future feature)
+- `settings.json` - Application settings
+- `backups.json` - Configuration backups
+
+#### Implementation Details
+- **Frontend**: Uses `ApiStorageAdapter` that calls `/api/*` endpoints
+- **Backend**: API endpoints in both `index.ts` (dev) and `cli.ts` (production)
+- **Storage layer**: `lib/fileStorage.ts` handles actual file operations
+- **Consistency**: Same storage location ensures MCPs persist between modes
+
+#### API Endpoints (Both Dev & Production)
+```
+GET/POST /api/mcps           # MCP configurations
+GET/POST /api/profiles       # User profiles  
+GET/POST /api/settings       # App settings
+GET/POST /api/backups        # Backup operations
+POST     /api/storage/clear  # Clear all data
+GET      /api/storage/info   # Storage statistics
+```
+
 ### Available Scripts
 
 ```bash
 # Development
-bun run dev              # Start dev server (browser storage)
+bun run dev              # Start dev server (file storage)
 bun run build            # Build npm package
 ./dist/cli.js            # Test built package
 
