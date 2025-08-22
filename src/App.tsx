@@ -184,6 +184,54 @@ function App() {
     });
   };
 
+  const handleCopyMCPJSON = async (mcp: MCP) => {
+    const config: any = {};
+    
+    // Handle different transport types
+    if (mcp.type === 'http' || mcp.type === 'sse') {
+      // HTTP/SSE server configuration
+      if (mcp.url) {
+        config.url = mcp.url;
+      }
+      if (mcp.headers && Object.keys(mcp.headers).length > 0) {
+        config.headers = mcp.headers;
+      }
+      if (mcp.type === 'sse') {
+        config.type = mcp.type;
+      }
+    } else {
+      // Stdio server configuration (default)
+      if (mcp.command) {
+        config.command = mcp.command;
+      }
+      if (mcp.args && mcp.args.length > 0) {
+        config.args = mcp.args;
+      }
+    }
+    
+    // Common fields for all types
+    if (mcp.env && Object.keys(mcp.env).length > 0) {
+      config.env = mcp.env;
+    }
+    if (typeof mcp.disabled === 'boolean') {
+      config.disabled = mcp.disabled;
+    }
+    if (mcp.alwaysAllow) {
+      config.alwaysAllow = mcp.alwaysAllow;
+    }
+
+    // Create the individual config string without root braces
+    const jsonString = `"${mcp.name}": ${JSON.stringify(config, null, 2)}`;
+    const success = await copyToClipboard(jsonString);
+    
+    showToast({
+      title: success ? 'Copied to clipboard' : 'Copy failed',
+      description: success ? `${mcp.name} configuration copied as JSON` : 'Failed to copy to clipboard',
+      type: success ? 'success' : 'error',
+      duration: 3000
+    });
+  };
+
   const handleRefresh = async () => {
     await loadData();
     const enabledMCPs = mcps.filter(mcp => !mcp.disabled);
@@ -485,6 +533,10 @@ function App() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={() => handleEditMCP(mcp)}>Edit</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleDuplicateMCP(mcp)}>Duplicate</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleCopyMCPJSON(mcp)}>
+                                  <Copy className="h-4 w-4 mr-2" />
+                                  Copy JSON
+                                </DropdownMenuItem>
                                 <DropdownMenuItem 
                                   onClick={() => handleTestConnection(mcp)}
                                   disabled={testingMCP === mcp.id}
