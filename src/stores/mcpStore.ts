@@ -348,20 +348,37 @@ export const useMCPStore = create<MCPStore>()(
             // Claude/Gemini format
             Object.entries(parsedData.mcpServers).forEach(([name, config]: [string, any]) => {
               try {
+                // Determine type based on config properties
+                let type: 'stdio' | 'http' | 'sse' = 'stdio'
+                if (config.url) {
+                  type = config.type === 'sse' ? 'sse' : 'http'
+                } else if (config.command) {
+                  type = 'stdio'
+                }
+
                 const mcp: MCP = {
                   id: crypto.randomUUID(),
                   name,
-                  command: config.command || '',
-                  args: config.args || [],
-                  env: config.env || {},
-                  disabled: config.disabled || false,
-                  alwaysAllow: config.alwaysAllow || [],
-                  type: config.type || 'stdio',
+                  type: config.type || type,
                   category: 'Imported',
                   description: `Imported from ${format.toUpperCase()}`,
                   usageCount: 0,
                   tags: ['imported'],
-                  source: 'import'
+                  source: 'import',
+                  disabled: config.disabled || false,
+                  // Conditional fields based on type
+                  ...(type === 'stdio' 
+                    ? {
+                        command: config.command || '',
+                        args: config.args || [],
+                      }
+                    : {
+                        url: config.url || '',
+                        headers: config.headers || {},
+                      }
+                  ),
+                  env: config.env || {},
+                  alwaysAllow: config.alwaysAllow || [],
                 };
                 mcpsToImport.push(mcp);
               } catch (error) {
@@ -411,16 +428,33 @@ export const useMCPStore = create<MCPStore>()(
         const mcpServers: Record<string, any> = {};
 
         mcpsToExport.forEach(mcp => {
-          const config: any = {
-            command: mcp.command,
-            args: mcp.args
-          };
+          const config: any = {};
 
+          // Handle different transport types
+          if (mcp.type === 'http' || mcp.type === 'sse') {
+            // HTTP/SSE server configuration
+            if (mcp.url) {
+              config.url = mcp.url;
+            }
+            if (mcp.headers && Object.keys(mcp.headers).length > 0) {
+              config.headers = mcp.headers;
+            }
+            if (mcp.type !== 'http') {
+              config.type = mcp.type;
+            }
+          } else {
+            // Stdio server configuration (default)
+            if (mcp.command) {
+              config.command = mcp.command;
+            }
+            if (mcp.args && mcp.args.length > 0) {
+              config.args = mcp.args;
+            }
+          }
+
+          // Common fields for all types
           if (mcp.env && Object.keys(mcp.env).length > 0) {
             config.env = mcp.env;
-          }
-          if (mcp.type && mcp.type !== 'stdio') {
-            config.type = mcp.type;
           }
           if (mcp.alwaysAllow && mcp.alwaysAllow.length > 0) {
             config.alwaysAllow = mcp.alwaysAllow;
@@ -431,6 +465,17 @@ export const useMCPStore = create<MCPStore>()(
             if (mcp.disabled) config.disabled = true;
           } else if (format === 'gemini') {
             // Gemini format specifics
+          }
+
+          // Only add type field if it's not the default for the configuration
+          if ((mcp.type === 'http' || mcp.type === 'sse') && mcp.url) {
+            // For HTTP/SSE with URL, only add type if it's SSE (HTTP is default)
+            if (mcp.type === 'sse') {
+              config.type = mcp.type;
+            }
+          } else if (mcp.type && mcp.type !== 'stdio') {
+            // For other types, include if not default stdio
+            config.type = mcp.type;
           }
 
           mcpServers[mcp.name] = config;

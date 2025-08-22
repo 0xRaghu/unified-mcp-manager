@@ -40,6 +40,7 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
     category: 'general',
     description: '',
     url: '',
+    headers: [{ key: '', value: '' }],
     alwaysAllow: ['']
   })
   const [jsonInput, setJsonInput] = React.useState('')
@@ -49,15 +50,18 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
     if (mcp) {
       setFormData({
         name: mcp.name,
-        command: mcp.command,
-        args: mcp.args.length > 0 ? mcp.args : [''],
+        command: mcp.command || '',
+        args: mcp.args && mcp.args.length > 0 ? mcp.args : [''],
         env: mcp.env 
           ? Object.entries(mcp.env).map(([key, value]) => ({ key, value }))
           : [{ key: '', value: '' }],
         type: mcp.type || 'stdio',
         category: mcp.category || 'general',
         description: mcp.description || '',
-        url: '',
+        url: mcp.url || '',
+        headers: mcp.headers
+          ? Object.entries(mcp.headers).map(([key, value]) => ({ key, value }))
+          : [{ key: '', value: '' }],
         alwaysAllow: mcp.alwaysAllow || ['']
       })
     } else {
@@ -70,6 +74,7 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
         category: 'general',
         description: '',
         url: '',
+        headers: [{ key: '', value: '' }],
         alwaysAllow: ['']
       })
     }
@@ -82,38 +87,59 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
       const parsed = JSON.parse(jsonInput)
       
       if (parsed.mcpServers) {
-        // Handle Claude/Gemini format
+        // Handle Claude/Gemini format like {"mcpServers": {"vercel": {"url": "https://mcp.vercel.com"}}}
         const firstServer = Object.entries(parsed.mcpServers)[0]
         if (firstServer) {
           const [name, config] = firstServer as [string, any]
+          
+          // Determine type based on config properties
+          let type: 'stdio' | 'http' | 'sse' = 'stdio'
+          if (config.url) {
+            type = 'http' // Default HTTP for URL-based configs
+          } else if (config.command) {
+            type = 'stdio'
+          }
+          
           setFormData(prev => ({
             ...prev,
             name,
             command: config.command || '',
-            args: config.args || [''],
+            args: config.args || (config.command ? [''] : []),
             env: config.env ? Object.entries(config.env).map(([key, value]) => ({ key, value: String(value) })) : [{ key: '', value: '' }],
-            type: config.type || 'stdio',
+            type: config.type || type,
+            url: config.url || '',
+            headers: config.headers ? Object.entries(config.headers).map(([key, value]) => ({ key, value: String(value) })) : [{ key: '', value: '' }],
             alwaysAllow: config.alwaysAllow || [''],
             description: `Imported from JSON`
           }))
         }
-      } else if (parsed.command) {
+      } else if (parsed.url || parsed.command || parsed.name) {
         // Handle direct MCP config format
+        let type: 'stdio' | 'http' | 'sse' = 'stdio'
+        if (parsed.url) {
+          type = 'http'
+        }
+        
         setFormData(prev => ({
           ...prev,
           name: parsed.name || '',
           command: parsed.command || '',
-          args: parsed.args || [''],
+          args: parsed.args || (parsed.command ? [''] : []),
           env: parsed.env ? Object.entries(parsed.env).map(([key, value]) => ({ key, value: String(value) })) : [{ key: '', value: '' }],
-          type: parsed.type || 'stdio',
+          type: parsed.type || type,
+          url: parsed.url || '',
+          headers: parsed.headers ? Object.entries(parsed.headers).map(([key, value]) => ({ key, value: String(value) })) : [{ key: '', value: '' }],
           description: parsed.description || '',
           alwaysAllow: parsed.alwaysAllow || ['']
         }))
+      } else {
+        alert('Unrecognized JSON format. Please ensure it contains either "mcpServers" object or direct MCP configuration.')
+        return
       }
       setJsonMode(false)
       setJsonInput('')
     } catch (error) {
-      alert('Invalid JSON format')
+      alert('Invalid JSON format: ' + (error as Error).message)
     }
   }
 
@@ -127,19 +153,46 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
       return acc
     }, {} as Record<string, string>)
     
+    const headersObject = formData.headers.reduce((acc, { key, value }) => {
+      if (key.trim() && value.trim()) {
+        acc[key.trim()] = value.trim()
+      }
+      return acc
+    }, {} as Record<string, string>)
+    
     const alwaysAllowArray = formData.alwaysAllow.filter(item => item.trim() !== '')
+    
+    // Validate required fields based on type
+    if ((formData.type === 'http' || formData.type === 'sse') && !formData.url.trim()) {
+      alert('URL is required for HTTP/SSE server types')
+      return
+    }
+    
+    if (formData.type === 'stdio' && !formData.command.trim()) {
+      alert('Command is required for stdio server type')
+      return
+    }
     
     const mcpData: Omit<MCP, 'id'> = {
       name: formData.name,
-      command: formData.command,
-      args: formData.args.filter(arg => arg.trim() !== ''),
-      env: Object.keys(envObject).length > 0 ? envObject : undefined,
       type: formData.type,
       category: formData.category,
       description: formData.description,
-      alwaysAllow: alwaysAllowArray.length > 0 ? alwaysAllowArray : undefined,
       usageCount: 0,
-      tags: []
+      tags: [],
+      // Conditional fields based on type
+      ...(formData.type === 'stdio' 
+        ? {
+            command: formData.command,
+            args: formData.args.filter(arg => arg.trim() !== ''),
+          }
+        : {
+            url: formData.url.trim(),
+            headers: Object.keys(headersObject).length > 0 ? headersObject : undefined,
+          }
+      ),
+      env: Object.keys(envObject).length > 0 ? envObject : undefined,
+      alwaysAllow: alwaysAllowArray.length > 0 ? alwaysAllowArray : undefined,
     }
     
     onSave(mcpData)
@@ -208,6 +261,29 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
     setFormData(prev => ({
       ...prev,
       alwaysAllow: prev.alwaysAllow.map((item, i) => i === index ? value : item)
+    }))
+  }
+
+  const addHeader = () => {
+    setFormData(prev => ({
+      ...prev,
+      headers: [...prev.headers, { key: '', value: '' }]
+    }))
+  }
+
+  const removeHeader = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      headers: prev.headers.filter((_, i) => i !== index)
+    }))
+  }
+
+  const updateHeader = (index: number, field: 'key' | 'value', value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      headers: prev.headers.map((header, i) => 
+        i === index ? { ...header, [field]: value } : header
+      )
     }))
   }
 
@@ -324,6 +400,46 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
               </div>
             )}
 
+            {(formData.type === 'http' || formData.type === 'sse') && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>HTTP Headers (Optional)</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addHeader}>
+                    <Plus className="w-4 h-4" />
+                    Add Header
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {formData.headers.map((header, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        value={header.key}
+                        onChange={(e) => updateHeader(index, 'key', e.target.value)}
+                        placeholder="Header-Name"
+                        className="flex-1"
+                      />
+                      <Input
+                        value={header.value}
+                        onChange={(e) => updateHeader(index, 'value', e.target.value)}
+                        placeholder="header value"
+                        className="flex-1"
+                      />
+                      {formData.headers.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => removeHeader(index)}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Environment Variables</Label>
@@ -417,7 +533,18 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
                 id="json-input"
                 value={jsonInput}
                 onChange={(e) => setJsonInput(e.target.value)}
-                placeholder={`Paste your MCP JSON configuration here. Supports formats like:
+                placeholder={`Paste your MCP JSON configuration here. Supports multiple formats:
+
+1. HTTP/SSE Server (like Vercel):
+{
+  "mcpServers": {
+    "vercel": {
+      "url": "https://mcp.vercel.com"
+    }
+  }
+}
+
+2. Stdio Server (traditional):
 {
   "mcpServers": {
     "github": {
@@ -430,12 +557,14 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
   }
 }
 
-Or direct format:
+3. Direct format:
 {
-  "name": "GitHub MCP",
-  "command": "npx",
-  "args": ["-y", "@modelcontextprotocol/server-github"],
-  "type": "stdio"
+  "name": "Notion API",
+  "url": "https://mcp.notion.com/mcp",
+  "type": "http",
+  "headers": {
+    "Authorization": "Bearer your-token"
+  }
 }`}
                 className="min-h-[200px] font-mono text-sm"
               />
