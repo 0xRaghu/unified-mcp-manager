@@ -16,25 +16,8 @@ export default defineConfig({
     },
   },
   build: {
-    // Exclude server-side files from the client build
-    rollupOptions: {
-      external: [
-        'fs',
-        'path',
-        'os',
-        'child_process',
-        'crypto',
-        'open'
-      ]
-    },
-    // Disable sourcemaps for faster builds
-    sourcemap: false,
-    // Enable minification to prevent potential circular reference issues
-    minify: true
-  },
-  server: {
-    // Disable HMR that might be causing issues
-    hmr: false
+    minify: false,
+    sourcemap: false
   },
   test: {
     globals: true,

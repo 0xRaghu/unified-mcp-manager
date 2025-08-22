@@ -21,7 +21,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "bun run build.js",
+    "build": "bun run build-fixed.js",
+    "build:complex": "bun run build.js",
     "build:vite": "vite build",
     "preview": "vite preview",
     "test": "vitest",

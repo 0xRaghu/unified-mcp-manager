@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './components/ui/dropdown-menu';
-import { copyToClipboard, downloadAsFile } from './lib/utils';
+import { copyToClipboard, downloadAsFile, convertToYaml } from './lib/utils';
 import { MCPForm } from './components/MCPForm';
 import { useToast } from './components/ui/toast';
 import { testMCPConnection } from './lib/mcpTester';
@@ -37,6 +37,7 @@ function App() {
     isLoading, 
     error, 
     mcps, 
+    filters,
     getFilteredMCPs,
     exportMCPs,
     setFilters,
@@ -47,7 +48,6 @@ function App() {
     toggleMCP
   } = useMCPStore();
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingMCP, setEditingMCP] = useState<MCP | undefined>(undefined);
   const [testingMCP, setTestingMCP] = useState<string | null>(null);
@@ -81,16 +81,13 @@ function App() {
     }
   }, [mcps.length]);
 
-  useEffect(() => {
-    setFilters({ search: searchQuery });
-  }, [searchQuery]); // Remove setFilters dependency to prevent infinite re-renders
 
   const filteredMCPs = useMemo(() => {
-    console.log('App: calculating filtered MCPs, mcps.length:', mcps.length);
+    console.log('App: calculating filtered MCPs, mcps.length:', mcps.length, 'filters:', filters);
     const result = getFilteredMCPs();
     console.log('App: filtered result:', result);
     return result;
-  }, [getFilteredMCPs, mcps]);
+  }, [getFilteredMCPs, mcps, filters]);
   const activeMCPs = useMemo(() => mcps.filter(mcp => !mcp.disabled).length, [mcps]);
 
   const handleExportJSON = async () => {
@@ -110,6 +107,43 @@ function App() {
     const exported = exportMCPs();
     const jsonString = JSON.stringify(exported, null, 2);
     downloadAsFile(jsonString, 'mcp-config.json', 'application/json');
+  };
+
+  const handleExportYAML = async () => {
+    try {
+      const exported = exportMCPs();
+      const yamlString = convertToYaml(exported);
+      const success = await copyToClipboard(yamlString);
+      
+      showToast({
+        title: success ? 'Copied to clipboard' : 'Copy failed',
+        description: success ? 'MCP configuration copied as YAML' : 'Failed to copy to clipboard',
+        type: success ? 'success' : 'error',
+        duration: 3000
+      });
+    } catch (error) {
+      showToast({
+        title: 'Export failed',
+        description: 'Failed to convert configuration to YAML',
+        type: 'error',
+        duration: 3000
+      });
+    }
+  };
+
+  const handleDownloadYAML = () => {
+    try {
+      const exported = exportMCPs();
+      const yamlString = convertToYaml(exported);
+      downloadAsFile(yamlString, 'mcp-config.yaml', 'application/x-yaml');
+    } catch (error) {
+      showToast({
+        title: 'Download failed',
+        description: 'Failed to convert configuration to YAML',
+        type: 'error',
+        duration: 3000
+      });
+    }
   };
 
   const handleAddMCP = () => {
@@ -275,8 +309,8 @@ function App() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
               <Input
                 placeholder="Search MCPs..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={filters.search}
+                onChange={(e) => setFilters({ search: e.target.value })}
                 className="pl-10 w-80"
               />
             </div>
@@ -301,14 +335,32 @@ function App() {
             </DropdownMenu>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExportJSON}>
-              <Copy className="h-4 w-4 mr-2" />
-              Copy JSON
-            </Button>
-            <Button variant="outline" onClick={handleDownloadJSON}>
-              <Download className="h-4 w-4 mr-2" />
-              Download
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Copy className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportJSON}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy as JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportYAML}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy as YAML
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadJSON}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadYAML}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download YAML
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button onClick={handleAddMCP}>
               <Plus className="h-4 w-4 mr-2" />
               Add MCP

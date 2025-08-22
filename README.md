@@ -349,6 +349,7 @@ localStorage.setItem('mcp-debug', 'true')
 - **Export Formats**: Support for YAML and other configuration formats
 - **Backup & Sync**: Cloud backup and synchronization across devices
 - **Copy JSON**: Copy the JSON configuration of individual mcps to clipboard for easy pasting into project `.mcp.json` files
+- **Enable or Disable All**: Enable or disable all MCPs with a single toggle
 
 ### Contributing
 We welcome contributions! Pick any roadmap item or suggest new features via GitHub issues.
