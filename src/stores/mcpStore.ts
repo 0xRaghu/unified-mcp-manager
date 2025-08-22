@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { storage } from '../lib/storage';
+import { checkForDuplicates, generateUniqueName } from '../lib/duplicateDetection';
 import type { 
   MCP, 
   Profile, 
@@ -114,12 +115,20 @@ export const useMCPStore = create<MCPStore>()(
       addMCP: async (mcpData) => {
         set({ isLoading: true, error: null });
         try {
+          // Check for duplicates and potentially generate unique name
+          const duplicateCheck = checkForDuplicates(mcpData, get().mcps);
+          let finalMcpData = { ...mcpData };
+          
+          if (duplicateCheck.isDuplicate && duplicateCheck.suggestedName) {
+            finalMcpData.name = duplicateCheck.suggestedName;
+          }
+
           const newMCP: MCP = {
-            ...mcpData,
+            ...finalMcpData,
             id: crypto.randomUUID(),
             usageCount: 0,
             lastUsed: new Date(),
-            disabled: mcpData.disabled || false
+            disabled: finalMcpData.disabled || false
           };
 
           const updatedMCPs = [...get().mcps, newMCP];
@@ -228,10 +237,13 @@ export const useMCPStore = create<MCPStore>()(
       duplicateMCP: async (id) => {
         const mcp = get().mcps.find(m => m.id === id);
         if (mcp) {
+          // Generate unique name for duplicate
+          const uniqueName = generateUniqueName(mcp.name, get().mcps);
+          
           await get().addMCP({
             ...mcp,
-            name: `${mcp.name} (Copy)`,
-            tags: [...mcp.tags]
+            name: uniqueName,
+            tags: [...mcp.tags, 'duplicate']
           });
         }
       },

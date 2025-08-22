@@ -4,6 +4,7 @@ import {
   Search, 
   Plus, 
   Download, 
+  Upload,
   Server, 
   Clock, 
   MoreVertical, 
@@ -27,9 +28,32 @@ import {
 } from './components/ui/dropdown-menu';
 import { copyToClipboard, downloadAsFile, convertToYaml } from './lib/utils';
 import { MCPForm } from './components/MCPForm';
+import { BulkImportDialog } from './components/BulkImportDialog';
 import { useToast } from './components/ui/toast';
 import { testMCPConnection } from './lib/mcpTester';
 import { Switch } from './components/ui/switch';
+
+// Utility function to process items in batches
+async function processBatch<T, R>(
+  items: T[],
+  processor: (item: T) => Promise<R>,
+  batchSize: number = 10
+): Promise<R[]> {
+  const results: R[] = [];
+  
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.allSettled(
+      batch.map(item => processor(item))
+    );
+    
+    results.push(...batchResults.map(result => 
+      result.status === 'fulfilled' ? result.value : null
+    ).filter(Boolean) as R[]);
+  }
+  
+  return results;
+}
 
 function App() {
   const { 
@@ -50,6 +74,7 @@ function App() {
   } = useMCPStore();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [editingMCP, setEditingMCP] = useState<MCP | undefined>(undefined);
   const [testingMCP, setTestingMCP] = useState<string | null>(null);
   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'connected' | 'disconnected' | 'testing'>>({});
@@ -63,18 +88,43 @@ function App() {
   useEffect(() => {
     const testAllConnections = async () => {
       const enabledMCPs = mcps.filter(mcp => !mcp.disabled);
-      for (const mcp of enabledMCPs) {
-        setConnectionStatuses(prev => ({ ...prev, [mcp.id]: 'testing' }));
-        try {
-          const result = await testMCPConnection(mcp);
-          setConnectionStatuses(prev => ({ 
-            ...prev, 
-            [mcp.id]: result.success ? 'connected' : 'disconnected' 
-          }));
-        } catch {
-          setConnectionStatuses(prev => ({ ...prev, [mcp.id]: 'disconnected' }));
-        }
-      }
+      
+      // Set all to testing status immediately
+      const initialStatuses = enabledMCPs.reduce((acc, mcp) => {
+        acc[mcp.id] = 'testing';
+        return acc;
+      }, {} as Record<string, 'connected' | 'disconnected' | 'testing'>);
+      setConnectionStatuses(prev => ({ ...prev, ...initialStatuses }));
+
+      // Test connections in batches if there are many MCPs (>20), otherwise all in parallel
+      const batchSize = enabledMCPs.length > 20 ? 10 : enabledMCPs.length;
+      
+      const results = await processBatch(
+        enabledMCPs,
+        async (mcp) => {
+          try {
+            const result = await testMCPConnection(mcp);
+            return {
+              id: mcp.id,
+              status: result.success ? 'connected' as const : 'disconnected' as const
+            };
+          } catch {
+            return {
+              id: mcp.id,
+              status: 'disconnected' as const
+            };
+          }
+        },
+        batchSize
+      );
+
+      // Update connection statuses
+      const finalStatuses = results.reduce((acc, result) => {
+        acc[result.id] = result.status;
+        return acc;
+      }, {} as Record<string, 'connected' | 'disconnected' | 'testing'>);
+      
+      setConnectionStatuses(prev => ({ ...prev, ...finalStatuses }));
     };
 
     if (mcps.length > 0) {
@@ -248,19 +298,43 @@ function App() {
   const handleRefresh = async () => {
     await loadData();
     const enabledMCPs = mcps.filter(mcp => !mcp.disabled);
-    setConnectionStatuses({});
-    for (const mcp of enabledMCPs) {
-      setConnectionStatuses(prev => ({ ...prev, [mcp.id]: 'testing' }));
-      try {
-        const result = await testMCPConnection(mcp);
-        setConnectionStatuses(prev => ({ 
-          ...prev, 
-          [mcp.id]: result.success ? 'connected' : 'disconnected' 
-        }));
-      } catch {
-        setConnectionStatuses(prev => ({ ...prev, [mcp.id]: 'disconnected' }));
-      }
-    }
+    
+    // Reset and set all to testing status immediately
+    const initialStatuses = enabledMCPs.reduce((acc, mcp) => {
+      acc[mcp.id] = 'testing';
+      return acc;
+    }, {} as Record<string, 'connected' | 'disconnected' | 'testing'>);
+    setConnectionStatuses(initialStatuses);
+
+    // Test connections in batches if there are many MCPs (>20), otherwise all in parallel
+    const batchSize = enabledMCPs.length > 20 ? 10 : enabledMCPs.length;
+    
+    const results = await processBatch(
+      enabledMCPs,
+      async (mcp) => {
+        try {
+          const result = await testMCPConnection(mcp);
+          return {
+            id: mcp.id,
+            status: result.success ? 'connected' as const : 'disconnected' as const
+          };
+        } catch {
+          return {
+            id: mcp.id,
+            status: 'disconnected' as const
+          };
+        }
+      },
+      batchSize
+    );
+
+    // Update connection statuses
+    const finalStatuses = results.reduce((acc, result) => {
+      acc[result.id] = result.status;
+      return acc;
+    }, {} as Record<string, 'connected' | 'disconnected' | 'testing'>);
+    
+    setConnectionStatuses(prev => ({ ...prev, ...finalStatuses }));
   };
 
 
@@ -396,9 +470,10 @@ function App() {
             </DropdownMenu>
           </div>
           <div className="flex gap-2">
+            {/* Export - Primary button (most used) */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">
+                <Button>
                   <Copy className="h-4 w-4 mr-2" />
                   Export
                 </Button>
@@ -422,9 +497,17 @@ function App() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button onClick={handleAddMCP}>
+            
+            {/* Add MCP - Secondary button */}
+            <Button variant="outline" onClick={handleAddMCP}>
               <Plus className="h-4 w-4 mr-2" />
               Add MCP
+            </Button>
+            
+            {/* Bulk Import - Tertiary button */}
+            <Button variant="outline" onClick={() => setIsBulkImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Bulk Import
             </Button>
           </div>
         </div>
@@ -459,6 +542,9 @@ function App() {
             {/* Enable/Disable All Toggle */}
             <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
               <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500">
+                  {filteredMCPs.filter(mcp => !mcp.disabled).length} of {filteredMCPs.length} enabled
+                </span>
                 <div className="flex items-center space-x-3">
                   <span className="text-sm font-medium text-gray-700">Enable/Disable All</span>
                   <Switch
@@ -466,9 +552,6 @@ function App() {
                     onCheckedChange={(enabled) => handleToggleAllMCPs(enabled)}
                     className="h-5 w-9"
                   />
-                </div>
-                <div className="text-sm text-gray-500">
-                  {filteredMCPs.filter(mcp => !mcp.disabled).length} of {filteredMCPs.length} enabled
                 </div>
               </div>
             </div>
@@ -592,6 +675,11 @@ function App() {
         onOpenChange={setIsFormOpen}
         mcp={editingMCP}
         onSave={handleSaveMCP}
+      />
+
+      <BulkImportDialog
+        open={isBulkImportOpen}
+        onOpenChange={setIsBulkImportOpen}
       />
 
       {/* Footer */}

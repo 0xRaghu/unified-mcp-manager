@@ -31,6 +31,7 @@ MCP Manager provides a centralized web UI where you can:
 - ✅ **Test connections** to verify MCP functionality
 - ✅ **Duplicate & edit** existing configurations
 - ✅ **Search & filter** through your MCP collection
+- ✅ **Bulk import** MCPs from JSON configuration files
 - ✅ **Secure storage** with encryption for sensitive environment variables
 
 ## 🚀 Quick Start
@@ -91,8 +92,15 @@ bun run build
 - **Test Connection**: Verify the MCP server is working
 - **Delete**: Remove with confirmation dialog
 
-### Exporting Configurations
+### Importing & Exporting Configurations
 
+#### Bulk Import
+- **Upload JSON Files**: Drag and drop or select JSON configuration files
+- **Intelligent Duplicate Detection**: Automatically detects existing MCPs and suggests unique names
+- **Selective Import**: Preview all MCPs and choose which ones to import
+- **Format Support**: Compatible with any JSON file containing an `mcpServers` object
+
+#### Export Options
 - **Copy JSON**: Copies configuration to clipboard
 - **Download**: Downloads as `mcp-config.json` file
 
@@ -172,11 +180,11 @@ The exported format is compatible with all major AI coding agents:
 - Automatic connection health monitoring
 
 #### ⚡ Advanced Features
-- Bulk operations for MCP management
-- Auto-refresh functionality
-- Real-time status updates
-- Connection timeout handling
-- Comprehensive error handling with user-friendly messages
+- **Bulk Import System**: Upload JSON files with drag-and-drop support and intelligent duplicate detection
+- **Auto-refresh functionality**: Keep MCP status up to date
+- **Real-time status updates**: Live connection monitoring
+- **Connection timeout handling**: Graceful handling of unresponsive MCPs
+- **Comprehensive error handling**: User-friendly error messages and recovery suggestions
 
 ## 🔧 Development
 
@@ -347,7 +355,6 @@ localStorage.setItem('mcp-debug', 'true')
 - **Profiles**: Create and manage different MCP configuration profiles for different projects
 - **Categorization**: Organize MCPs into categories (Development, Security, Data, etc.)
 - **Dark Mode**: Enhanced dark theme with system preference detection
-- **Bulk Import**: Add multiple MCP servers at once via JSON file upload
 - **Backup & Sync**: Cloud backup and synchronization across devices
 
 ### Contributing
