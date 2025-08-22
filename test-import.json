@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "test-archon": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://localhost:8051/mcp"
+      ]
+    },
+    "test-shadcn-ui": {
+      "command": "npx",
+      "args": ["@jpisnice/shadcn-ui-mcp-server"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "test_token"
+      },
+      "disabled": true
+    },
+    "test-http-server": {
+      "url": "https://api.example.com/mcp",
+      "type": "http",
+      "headers": {
+        "Authorization": "Bearer test"
+      }
+    },
+    "test-sse-server": {
+      "url": "https://sse.example.com/mcp",
+      "type": "sse",
+      "env": {
+        "API_KEY": "test_key"
+      }
+    }
+  }
+}

@@ -117,6 +117,32 @@ bun run test:e2e:ui      # E2E tests with UI
 bun run lint             # TypeScript type checking
 ```
 
+## 💾 Key Features Development Guide
+
+### Working with Bulk Import Feature
+
+The bulk import functionality is implemented in several key files:
+
+#### Core Components
+- **`src/components/BulkImportDialog.tsx`**: Main dialog component with drag-and-drop interface
+- **`src/lib/duplicateDetection.ts`**: Logic for detecting and handling duplicate MCPs
+- **`src/App.tsx`**: Integration point for the bulk import button and dialog
+
+#### Key Features
+- **Drag & Drop Support**: Uses HTML5 drag and drop API for file uploads
+- **JSON Parsing**: Expects files with `mcpServers` object structure  
+- **Duplicate Detection**: Compares name, command, URL, and configuration
+- **Selective Import**: Checkbox interface to choose which MCPs to import
+- **Auto-renaming**: Suggests unique names for duplicate MCPs
+- **Progress Tracking**: Multi-step wizard (upload → preview → complete)
+
+#### Testing Bulk Import
+1. Create test JSON files with various MCP configurations
+2. Test drag and drop functionality across browsers
+3. Verify duplicate detection with existing MCPs
+4. Test error handling for malformed JSON files
+5. Ensure proper cleanup and state reset
+
 ### Making Changes
 
 1. **Create a Feature Branch**
@@ -193,7 +219,7 @@ chore: update dependencies
 ### High Priority
 - **YAML Export Support**: Add export format for Crush agent
 - **Profile Management**: Multiple MCP configuration profiles
-- **Bulk Operations**: Import/export multiple MCPs
+- **Enhanced Bulk Operations**: Advanced filtering and transformation during import
 - **Performance**: Optimize for large MCP collections
 
 ### Medium Priority
@@ -245,6 +271,12 @@ test('should add new MCP', async ({ page }) => {
 - [ ] App starts correctly: `./dist/cli.js`
 - [ ] Storage directory created: `~/.unified-mcp-manager/`
 - [ ] All core features work (add, edit, delete, export)
+- [ ] **Bulk import functionality**:
+  - [ ] Drag and drop JSON files works
+  - [ ] File selection dialog works
+  - [ ] Duplicate detection and naming works
+  - [ ] Selective import with checkboxes works
+  - [ ] Import process completes successfully
 - [ ] No console errors
 - [ ] TypeScript compilation succeeds
 
