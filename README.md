@@ -2,7 +2,7 @@
 
 > **Centralized MCP Configuration Management Tool for AI Coding Agents**
 
-A modern web application that solves the fragmentation problem of MCP (Model Context Protocol) configurations across different AI coding agents like Claude, Gemini, Crush, and OpenCode.
+A powerful npm package that solves the fragmentation problem of MCP (Model Context Protocol) configurations across different AI coding agents like Claude, Gemini, Crush, and OpenCode. Install once, use everywhere with persistent storage across browsers.
 
 ## 🎯 Problem Statement
 
@@ -35,12 +35,22 @@ MCP Manager provides a centralized web UI where you can:
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### NPM Package Installation (Recommended)
 
-- [Bun](https://bun.sh/) (recommended) or Node.js 18+
-- Modern web browser
+```bash
+# Install globally
+npm install -g @0xraghu/unified-mcp-manager
 
-### Installation
+# Run the app (opens automatically in browser)
+mcp-manager
+
+# Or with custom port
+mcp-manager --port 8080
+```
+
+Your MCP configurations will be stored in `~/.unified-mcp-manager/` and persist across browsers!
+
+### Development Setup
 
 ```bash
 # Clone the repository
@@ -50,20 +60,14 @@ cd unified-mcp-manager
 # Install dependencies
 bun install
 
-# Start development server
+# Start development server (browser storage)
 bun run dev
-```
 
-The application will be available at `http://localhost:5173`
-
-### Production Build
-
-```bash
-# Build for production
+# Build npm package
 bun run build
 
-# Preview production build
-bun run preview
+# Test built package locally
+./dist/cli.js --port 3001
 ```
 
 ## 🖥️ Usage
@@ -113,37 +117,41 @@ The exported format is compatible with all major AI coding agents:
 - **Frontend**: React 19 + TypeScript
 - **Styling**: TailwindCSS v4 + shadcn/ui
 - **State Management**: Zustand
-- **Storage**: LocalStorage with Web Crypto API encryption
+- **Storage**: File-based storage in `~/.unified-mcp-manager/` (npm package) or LocalStorage (dev mode)
+- **Server**: Bun.serve() with API endpoints
 - **Animations**: Framer Motion
 - **Testing**: Playwright (E2E) + Vitest (Unit)
-- **Build Tool**: Vite
+- **Build Tool**: Custom Bun bundler
 - **Runtime**: Bun
 
 ### Project Structure
 
 ```
-src/
-├── components/          # React components
-│   ├── ui/             # shadcn/ui components
-│   └── MCPForm.tsx     # MCP form component
-├── lib/                # Utility libraries
-│   ├── storage.ts      # Encrypted storage
-│   ├── crypto.ts       # Encryption utilities
-│   ├── mcpTester.ts    # Connection testing
-│   └── utils.ts        # General utilities
-├── stores/             # Zustand stores
-│   └── mcpStore.ts     # Main MCP state management
-├── types/              # TypeScript type definitions
-│   └── index.ts        # Core interfaces
-└── App.tsx             # Main application component
+├── dist/               # Built npm package
+│   ├── cli.js          # Main executable
+│   ├── server.js       # API server
+│   ├── main.js         # Frontend bundle
+│   └── lib/            # Storage utilities
+├── src/                # React frontend
+│   ├── components/     # UI components
+│   ├── lib/           # Browser utilities
+│   ├── stores/        # State management
+│   └── types/         # TypeScript types
+├── lib/               # Server-side utilities
+│   ├── fileStorage.ts # File system storage
+│   └── storageAdapter.ts # Storage abstraction
+├── server.ts          # Bun API server
+├── cli.ts             # CLI entry point
+└── build.js           # Custom build script
 ```
 
 ### Key Features
 
 #### 🔐 Secure Storage
-- Environment variables encrypted using Web Crypto API
-- AES-GCM encryption with random salts
-- No sensitive data stored in plain text
+- **NPM Package**: File-based storage in `~/.unified-mcp-manager/`
+- **Development**: Browser localStorage with Web Crypto API encryption
+- AES-GCM encryption with random salts for sensitive data
+- Cross-browser persistence when using npm package
 
 #### 🎨 Modern UI
 - Responsive design (mobile, tablet, desktop)
@@ -174,9 +182,9 @@ src/
 
 ```bash
 # Development
-bun run dev              # Start dev server
-bun run build            # Production build
-bun run preview          # Preview build
+bun run dev              # Start dev server (browser storage)
+bun run build            # Build npm package
+./dist/cli.js            # Test built package locally
 
 # Testing  
 bun run test             # Unit tests
@@ -186,6 +194,11 @@ bun run test:e2e:ui      # E2E tests with UI
 
 # Linting
 bun run lint             # TypeScript type checking
+
+# Package Testing
+bun run build            # Build the package
+./dist/cli.js --help     # Test CLI help
+./dist/cli.js --port 3001 # Test with custom port
 ```
 
 ### Adding New MCP Types
@@ -194,15 +207,82 @@ bun run lint             # TypeScript type checking
 2. Update `src/lib/mcpTester.ts` for connection testing logic
 3. Add export format support in `src/stores/mcpStore.ts`
 
+## 🧪 Testing Instructions
+
+### Quick Test (Built Package)
+
+```bash
+# 1. Build the package
+bun run build
+
+# 2. Test CLI help
+./dist/cli.js --help
+
+# 3. Start the server (Ctrl+C to stop)
+./dist/cli.js --port 3001
+
+# 4. Check storage directory was created
+ls ~/.unified-mcp-manager/
+```
+
+### Full Testing Workflow
+
+```bash
+# 1. Install dependencies
+bun install
+
+# 2. Run linting
+bun run lint
+
+# 3. Build the package
+bun run build
+
+# 4. Test CLI functionality
+./dist/cli.js --version
+./dist/cli.js --help
+
+# 5. Test server startup
+./dist/cli.js --port 3001 &
+SERVER_PID=$!
+
+# 6. Test API endpoints
+curl http://localhost:3001/api/mcps
+curl http://localhost:3001/
+
+# 7. Kill server
+kill $SERVER_PID
+
+# 8. Verify storage directory
+ls -la ~/.unified-mcp-manager/
+```
+
+### Publishing Test
+
+```bash
+# 1. Build and test locally
+bun run build
+./dist/cli.js --port 3002
+
+# 2. Test npm pack (don't publish yet)
+npm pack
+
+# 3. Test the packed tarball
+tar -tzf *.tgz
+
+# 4. Clean up
+rm *.tgz
+```
+
 ### Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
 4. Run tests (`bun run test && bun run test:e2e`)
-5. Commit changes (`git commit -m 'Add amazing feature'`)
-6. Push to branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+5. Test the built package (`bun run build && ./dist/cli.js --help`)
+6. Commit changes (`git commit -m 'Add amazing feature'`)
+7. Push to branch (`git push origin feature/amazing-feature`)
+8. Open a Pull Request
 
 ## 🤝 MCP Compatibility
 
@@ -268,6 +348,8 @@ localStorage.setItem('mcp-debug', 'true')
 - **Bulk Import**: Add multiple MCP servers at once via JSON file upload
 - **Export Formats**: Support for YAML and other configuration formats
 - **Backup & Sync**: Cloud backup and synchronization across devices
+- **Copy JSON**: Copy the JSON configuration of individual mcps to clipboard for easy pasting into project `.mcp.json` files
+- **Enable or Disable All**: Enable or disable all MCPs with a single toggle
 
 ### Contributing
 We welcome contributions! Pick any roadmap item or suggest new features via GitHub issues.

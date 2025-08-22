@@ -42,3 +42,4 @@ test-results
 playwright-report
 .cursor
 .playwright-mcp
+bun.lock

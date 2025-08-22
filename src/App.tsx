@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, 
@@ -10,15 +10,12 @@ import {
   Filter, 
   RefreshCw,
   Copy,
-  Grid3X3,
-  List,
   Wifi,
   WifiOff,
   AlertCircle
 } from 'lucide-react';
 import { useMCPStore } from './stores/mcpStore';
 import type { MCP } from './types';
-import { Card, CardContent } from './components/ui/card';
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
 import { Input } from './components/ui/input';
@@ -28,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './components/ui/dropdown-menu';
-import { copyToClipboard, downloadAsFile } from './lib/utils';
+import { copyToClipboard, downloadAsFile, convertToYaml } from './lib/utils';
 import { MCPForm } from './components/MCPForm';
 import { useToast } from './components/ui/toast';
 import { testMCPConnection } from './lib/mcpTester';
@@ -40,6 +37,7 @@ function App() {
     isLoading, 
     error, 
     mcps, 
+    filters,
     getFilteredMCPs,
     exportMCPs,
     setFilters,
@@ -50,17 +48,15 @@ function App() {
     toggleMCP
   } = useMCPStore();
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingMCP, setEditingMCP] = useState<MCP | undefined>(undefined);
   const [testingMCP, setTestingMCP] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'connected' | 'disconnected' | 'testing'>>({});
   const { showToast } = useToast();
   
   useEffect(() => {
     loadData();
-  }, [loadData]);
+  }, []); // Remove loadData dependency to prevent infinite re-renders
 
   // Test connections for all enabled MCPs on app start
   useEffect(() => {
@@ -85,12 +81,14 @@ function App() {
     }
   }, [mcps.length]);
 
-  useEffect(() => {
-    setFilters({ search: searchQuery });
-  }, [searchQuery, setFilters]);
 
-  const filteredMCPs = getFilteredMCPs();
-  const activeMCPs = mcps.filter(mcp => !mcp.disabled).length;
+  const filteredMCPs = useMemo(() => {
+    console.log('App: calculating filtered MCPs, mcps.length:', mcps.length, 'filters:', filters);
+    const result = getFilteredMCPs();
+    console.log('App: filtered result:', result);
+    return result;
+  }, [getFilteredMCPs, mcps, filters]);
+  const activeMCPs = useMemo(() => mcps.filter(mcp => !mcp.disabled).length, [mcps]);
 
   const handleExportJSON = async () => {
     const exported = exportMCPs();
@@ -109,6 +107,43 @@ function App() {
     const exported = exportMCPs();
     const jsonString = JSON.stringify(exported, null, 2);
     downloadAsFile(jsonString, 'mcp-config.json', 'application/json');
+  };
+
+  const handleExportYAML = async () => {
+    try {
+      const exported = exportMCPs();
+      const yamlString = convertToYaml(exported);
+      const success = await copyToClipboard(yamlString);
+      
+      showToast({
+        title: success ? 'Copied to clipboard' : 'Copy failed',
+        description: success ? 'MCP configuration copied as YAML' : 'Failed to copy to clipboard',
+        type: success ? 'success' : 'error',
+        duration: 3000
+      });
+    } catch (error) {
+      showToast({
+        title: 'Export failed',
+        description: 'Failed to convert configuration to YAML',
+        type: 'error',
+        duration: 3000
+      });
+    }
+  };
+
+  const handleDownloadYAML = () => {
+    try {
+      const exported = exportMCPs();
+      const yamlString = convertToYaml(exported);
+      downloadAsFile(yamlString, 'mcp-config.yaml', 'application/x-yaml');
+    } catch (error) {
+      showToast({
+        title: 'Download failed',
+        description: 'Failed to convert configuration to YAML',
+        type: 'error',
+        duration: 3000
+      });
+    }
   };
 
   const handleAddMCP = () => {
@@ -274,8 +309,8 @@ function App() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
               <Input
                 placeholder="Search MCPs..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={filters.search}
+                onChange={(e) => setFilters({ search: e.target.value })}
                 className="pl-10 w-80"
               />
             </div>
@@ -298,34 +333,34 @@ function App() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <div className="flex border rounded-md">
-              <Button 
-                variant={viewMode === 'grid' ? 'default' : 'ghost'} 
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className="rounded-r-none"
-              >
-                <Grid3X3 className="h-4 w-4" />
-              </Button>
-              <Button 
-                variant={viewMode === 'list' ? 'default' : 'ghost'} 
-                size="sm"
-                onClick={() => setViewMode('list')}
-                className="rounded-l-none"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExportJSON}>
-              <Copy className="h-4 w-4 mr-2" />
-              Copy JSON
-            </Button>
-            <Button variant="outline" onClick={handleDownloadJSON}>
-              <Download className="h-4 w-4 mr-2" />
-              Download
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Copy className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportJSON}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy as JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportYAML}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy as YAML
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadJSON}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadYAML}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download YAML
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button onClick={handleAddMCP}>
               <Plus className="h-4 w-4 mr-2" />
               Add MCP
@@ -356,109 +391,6 @@ function App() {
             <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No MCPs found</h3>
             <p className="text-gray-600">Try adjusting your search or filters.</p>
-          </div>
-        ) : viewMode === 'grid' ? (
-          // MCP Grid
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <AnimatePresence>
-              {filteredMCPs.map((mcp) => {
-                const connectionStatus = connectionStatuses[mcp.id];
-                const isConnected = connectionStatus === 'connected';
-                const isConnecting = connectionStatus === 'testing';
-                const isDisconnected = connectionStatus === 'disconnected';
-                
-                return (
-                  <motion.div
-                    key={mcp.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.3 }}
-                    whileHover={{ scale: 1.02 }}
-                  >
-                    <Card className="hover:shadow-lg transition-shadow duration-200">
-                      <CardContent className="p-4">
-                        <div className="space-y-4">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-blue-50 rounded-lg">
-                                <Server className="h-5 w-5 text-blue-600" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h3 className="font-medium text-gray-900 truncate">{mcp.name}</h3>
-                                <p className="text-sm text-gray-600 truncate">
-                                  {mcp.description || 'No description'}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="flex items-center gap-2">
-                                <Switch
-                                  checked={!mcp.disabled}
-                                  onCheckedChange={() => handleToggleMCP(mcp)}
-                                  className="h-4 w-7"
-                                />
-                              </div>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleEditMCP(mcp)}>Edit</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleDuplicateMCP(mcp)}>Duplicate</DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    onClick={() => handleTestConnection(mcp)}
-                                    disabled={testingMCP === mcp.id}
-                                  >
-                                    {testingMCP === mcp.id ? 'Testing...' : 'Test Connection'}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleDeleteMCP(mcp)} className="text-red-600">Delete</DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              {isConnecting ? (
-                                <Badge variant="outline" className="text-yellow-600">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  Testing...
-                                </Badge>
-                              ) : !mcp.disabled ? (
-                                <Badge 
-                                  variant="outline" 
-                                  className={isConnected ? "text-green-600" : isDisconnected ? "text-red-600" : "text-gray-500"}
-                                >
-                                  {isConnected ? <Wifi className="h-3 w-3 mr-1" /> : <WifiOff className="h-3 w-3 mr-1" />}
-                                  {isConnected ? 'Connected' : isDisconnected ? 'Disconnected' : 'Unknown'}
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-gray-500">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  Disabled
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="text-sm">
-                            <span className="text-gray-500">Type: </span>
-                            <span className="font-semibold capitalize">{mcp.type || 'stdio'}</span>
-                          </div>
-
-                          <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded font-mono overflow-x-auto whitespace-nowrap">
-                            {mcp.command} {mcp.args.join(' ')}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
           </div>
         ) : (
           // MCP Table View
