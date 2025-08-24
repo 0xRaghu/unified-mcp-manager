@@ -18,6 +18,8 @@ export interface StorageAdapter {
   // Profile operations
   getProfiles(): Profile[];
   saveProfiles(profiles: Profile[]): void;
+  getProfilesAsync?(): Promise<Profile[]>; // Optional async version
+  saveProfilesAsync?(profiles: Profile[]): Promise<void>; // Optional async version
   
   // Settings operations
   getSettings(): AppSettings;
@@ -38,6 +40,9 @@ export interface StorageAdapter {
 // API-based storage adapter for frontend
 export class ApiStorageAdapter implements StorageAdapter {
   private baseUrl: string;
+  private profilesCache: Profile[] | null = null;
+  private profilesCacheTime = 0;
+  private readonly CACHE_TTL = 5000; // 5 second cache TTL
 
   constructor(baseUrl: string = '') {
     this.baseUrl = baseUrl;
@@ -84,19 +89,40 @@ export class ApiStorageAdapter implements StorageAdapter {
   }
 
   getProfiles(): Profile[] {
-    // For API adapter, we need to make this async or cache
-    // For now, return empty array and let the store handle async loading
-    return [];
+    // Return cached profiles if available and fresh
+    const now = Date.now();
+    if (this.profilesCache && (now - this.profilesCacheTime) < this.CACHE_TTL) {
+      return this.profilesCache;
+    }
+    
+    // Otherwise return empty array and trigger async load
+    this.getProfilesAsync().then(profiles => {
+      this.profilesCache = profiles;
+      this.profilesCacheTime = Date.now();
+    }).catch(console.error);
+    
+    return this.profilesCache || [];
   }
 
   async getProfilesAsync(): Promise<Profile[]> {
-    const profiles = await this.apiCall<Profile[]>('/profiles');
-    // Convert date strings back to Date objects
-    return profiles.map(profile => ({
-      ...profile,
-      createdAt: new Date(profile.createdAt),
-      updatedAt: new Date(profile.updatedAt)
-    }));
+    try {
+      const profiles = await this.apiCall<Profile[]>('/profiles');
+      // Convert date strings back to Date objects
+      const result = profiles.map(profile => ({
+        ...profile,
+        createdAt: new Date(profile.createdAt),
+        updatedAt: new Date(profile.updatedAt)
+      }));
+      
+      // Update cache
+      this.profilesCache = result;
+      this.profilesCacheTime = Date.now();
+      
+      return result;
+    } catch (error) {
+      console.error('Failed to load profiles:', error);
+      return [];
+    }
   }
 
   saveProfiles(profiles: Profile[]): void {
@@ -112,6 +138,10 @@ export class ApiStorageAdapter implements StorageAdapter {
       method: 'POST',
       body: JSON.stringify(profiles)
     });
+    
+    // Update cache immediately
+    this.profilesCache = profiles;
+    this.profilesCacheTime = Date.now();
   }
 
   getSettings(): AppSettings {

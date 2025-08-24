@@ -149,6 +149,7 @@ function levenshteinDistance(str1: string, str2: string): number {
 
 /**
  * Generate a unique name by appending numbers
+ * FIXED: Prevent infinite loops with safety limit and correct comparison
  */
 export function generateUniqueName(baseName: string, existingMCPs: MCP[]): string {
   const existingNames = new Set(existingMCPs.map(mcp => mcp.name.toLowerCase()));
@@ -163,6 +164,12 @@ export function generateUniqueName(baseName: string, existingMCPs: MCP[]): strin
   do {
     uniqueName = `${baseName} (${counter})`;
     counter++;
+    
+    // SAFETY: Prevent infinite loops
+    if (counter > 1000) {
+      console.warn('generateUniqueName: Hit safety limit, using timestamp');
+      return `${baseName} (${Date.now()})`;
+    }
   } while (existingNames.has(uniqueName.toLowerCase()));
 
   return uniqueName;

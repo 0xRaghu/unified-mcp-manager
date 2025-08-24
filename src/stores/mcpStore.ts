@@ -28,14 +28,20 @@ interface MCPStore {
   isLoading: boolean;
   error: string | null;
 
+  // Profile change tracking
+  hasUnsavedProfileChanges: () => boolean;
+  saveCurrentStateToProfile: () => Promise<void>;
+
   // MCP Operations
-  addMCP: (mcp: Omit<MCP, 'id' | 'usageCount' | 'lastUsed'>) => Promise<void>;
+  addMCP: (mcp: Omit<MCP, 'id' | 'usageCount' | 'lastUsed'>) => Promise<MCP>;
+  addMCPToProfiles: (mcp: Omit<MCP, 'id' | 'usageCount' | 'lastUsed'>, profileIds?: string[]) => Promise<MCP>;
   updateMCP: (id: string, updates: Partial<MCP>) => Promise<void>;
   deleteMCP: (id: string) => Promise<void>;
   toggleMCP: (id: string) => Promise<void>;
   bulkToggleMCPs: (ids: string[], enabled: boolean) => Promise<void>;
   bulkDeleteMCPs: (ids: string[]) => Promise<void>;
   duplicateMCP: (id: string) => Promise<void>;
+  enableAllMCPs: () => Promise<void>;
 
   // Profile Operations
   createProfile: (profile: Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
@@ -111,6 +117,50 @@ export const useMCPStore = create<MCPStore>()(
       isLoading: false,
       error: null,
 
+      // Profile change tracking computed methods
+      hasUnsavedProfileChanges: () => {
+        const { selectedProfile, mcps } = get();
+        if (!selectedProfile) return false;
+        
+        // Get currently enabled MCP IDs
+        const currentlyEnabledMCPIds = mcps.filter(mcp => !mcp.disabled).map(mcp => mcp.id).sort();
+        
+        // Get profile's MCP IDs sorted for comparison
+        const profileMCPIds = [...selectedProfile.mcpIds].sort();
+        
+        // Compare arrays to detect changes
+        if (currentlyEnabledMCPIds.length !== profileMCPIds.length) {
+          return true;
+        }
+        
+        return currentlyEnabledMCPIds.some((id, index) => id !== profileMCPIds[index]);
+      },
+
+      saveCurrentStateToProfile: async () => {
+        const { selectedProfile, mcps, updateProfile } = get();
+        if (!selectedProfile) {
+          throw new Error('No active profile to save to');
+        }
+        
+        // Get currently enabled MCP IDs
+        const currentlyEnabledMCPIds = mcps.filter(mcp => !mcp.disabled).map(mcp => mcp.id);
+        
+        // Update the profile with current state
+        await updateProfile(selectedProfile.id, {
+          mcpIds: currentlyEnabledMCPIds,
+          updatedAt: new Date()
+        });
+        
+        // Update selectedProfile state to reflect the changes
+        set({ 
+          selectedProfile: {
+            ...selectedProfile,
+            mcpIds: currentlyEnabledMCPIds,
+            updatedAt: new Date()
+          }
+        });
+      },
+
       // MCP Operations
       addMCP: async (mcpData) => {
         set({ isLoading: true, error: null });
@@ -139,6 +189,41 @@ export const useMCPStore = create<MCPStore>()(
           if (get().settings.autoBackup) {
             await get().createBackup(`Added MCP: ${newMCP.name}`);
           }
+
+          return newMCP;
+        } catch (error) {
+          set({ error: (error as Error).message });
+          throw error;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      // Combined operation to add MCP and update profiles atomically
+      addMCPToProfiles: async (mcpData, profileIds?: string[]) => {
+        set({ isLoading: true, error: null });
+        try {
+          // Create the MCP first
+          const newMCP = await get().addMCP(mcpData);
+          
+          // Update profiles if provided
+          if (profileIds && profileIds.length > 0) {
+            const { profiles, updateProfile } = get();
+            
+            const updatePromises = profileIds.map(async (profileId) => {
+              const profile = profiles.find(p => p.id === profileId);
+              if (profile && !profile.mcpIds.includes(newMCP.id)) {
+                await updateProfile(profileId, {
+                  mcpIds: [...profile.mcpIds, newMCP.id],
+                  updatedAt: new Date()
+                });
+              }
+            });
+            
+            await Promise.all(updatePromises);
+          }
+
+          return newMCP;
         } catch (error) {
           set({ error: (error as Error).message });
           throw error;
@@ -169,9 +254,36 @@ export const useMCPStore = create<MCPStore>()(
           const mcpToDelete = get().mcps.find(mcp => mcp.id === id);
           if (!mcpToDelete) throw new Error('MCP not found');
 
+          // Remove MCP from all profiles that contain it
+          const { profiles, updateProfile } = get();
+          const profilesToUpdate = profiles.filter(profile => profile.mcpIds.includes(id));
+          
+          const profileUpdatePromises = profilesToUpdate.map(async (profile) => {
+            const updatedMcpIds = profile.mcpIds.filter(mcpId => mcpId !== id);
+            await updateProfile(profile.id, {
+              mcpIds: updatedMcpIds,
+              updatedAt: new Date()
+            });
+          });
+
+          // Wait for all profile updates to complete
+          await Promise.all(profileUpdatePromises);
+
+          // Remove the MCP from the MCPs array
           const updatedMCPs = get().mcps.filter(mcp => mcp.id !== id);
           set({ mcps: updatedMCPs });
           await storage.saveMCPs(updatedMCPs);
+
+          // Update selectedProfile if it was affected
+          const currentSelectedProfile = get().selectedProfile;
+          if (currentSelectedProfile && currentSelectedProfile.mcpIds.includes(id)) {
+            const updatedSelectedProfile = {
+              ...currentSelectedProfile,
+              mcpIds: currentSelectedProfile.mcpIds.filter(mcpId => mcpId !== id),
+              updatedAt: new Date()
+            };
+            set({ selectedProfile: updatedSelectedProfile });
+          }
 
           // Remove from bulk selection if selected
           const currentSelection = get().bulkActions.selectedIds;
@@ -217,9 +329,39 @@ export const useMCPStore = create<MCPStore>()(
       bulkDeleteMCPs: async (ids) => {
         set({ isLoading: true, error: null });
         try {
+          // Remove MCPs from all profiles that contain them
+          const { profiles, updateProfile } = get();
+          const profilesToUpdate = profiles.filter(profile => 
+            profile.mcpIds.some(mcpId => ids.includes(mcpId))
+          );
+          
+          const profileUpdatePromises = profilesToUpdate.map(async (profile) => {
+            const updatedMcpIds = profile.mcpIds.filter(mcpId => !ids.includes(mcpId));
+            await updateProfile(profile.id, {
+              mcpIds: updatedMcpIds,
+              updatedAt: new Date()
+            });
+          });
+
+          // Wait for all profile updates to complete
+          await Promise.all(profileUpdatePromises);
+
+          // Remove the MCPs from the MCPs array
           const updatedMCPs = get().mcps.filter(mcp => !ids.includes(mcp.id));
           set({ mcps: updatedMCPs });
           await storage.saveMCPs(updatedMCPs);
+
+          // Update selectedProfile if it was affected
+          const currentSelectedProfile = get().selectedProfile;
+          if (currentSelectedProfile && currentSelectedProfile.mcpIds.some(mcpId => ids.includes(mcpId))) {
+            const updatedSelectedProfile = {
+              ...currentSelectedProfile,
+              mcpIds: currentSelectedProfile.mcpIds.filter(mcpId => !ids.includes(mcpId)),
+              updatedAt: new Date()
+            };
+            set({ selectedProfile: updatedSelectedProfile });
+          }
+
           get().clearBulkSelection();
 
           // Auto-backup if enabled
@@ -248,6 +390,23 @@ export const useMCPStore = create<MCPStore>()(
         }
       },
 
+      enableAllMCPs: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const updatedMCPs = get().mcps.map(mcp => ({
+            ...mcp,
+            disabled: false
+          }));
+          set({ mcps: updatedMCPs });
+          await storage.saveMCPs(updatedMCPs);
+        } catch (error) {
+          set({ error: (error as Error).message });
+          throw error;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
       // Profile Operations
       createProfile: async (profileData) => {
         set({ isLoading: true, error: null });
@@ -261,7 +420,11 @@ export const useMCPStore = create<MCPStore>()(
 
           const updatedProfiles = [...get().profiles, newProfile];
           set({ profiles: updatedProfiles });
-          storage.saveProfiles(updatedProfiles);
+          if (storage.saveProfilesAsync) {
+            await storage.saveProfilesAsync(updatedProfiles);
+          } else {
+            storage.saveProfiles(updatedProfiles);
+          }
         } catch (error) {
           set({ error: (error as Error).message });
           throw error;
@@ -275,13 +438,21 @@ export const useMCPStore = create<MCPStore>()(
           profile.id === id ? { ...profile, ...updates, updatedAt: new Date() } : profile
         );
         set({ profiles: updatedProfiles });
-        storage.saveProfiles(updatedProfiles);
+        if (storage.saveProfilesAsync) {
+          await storage.saveProfilesAsync(updatedProfiles);
+        } else {
+          storage.saveProfiles(updatedProfiles);
+        }
       },
 
       deleteProfile: async (id) => {
         const updatedProfiles = get().profiles.filter(profile => profile.id !== id);
         set({ profiles: updatedProfiles });
-        storage.saveProfiles(updatedProfiles);
+        if (storage.saveProfilesAsync) {
+          await storage.saveProfilesAsync(updatedProfiles);
+        } else {
+          storage.saveProfiles(updatedProfiles);
+        }
 
         // Clear selected profile if it was deleted
         if (get().selectedProfile?.id === id) {
@@ -605,11 +776,29 @@ export const useMCPStore = create<MCPStore>()(
         try {
           const [mcps, profiles, settings] = await Promise.all([
             storage.getMCPs(),
-            Promise.resolve(storage.getProfiles()),
+            storage.getProfilesAsync ? storage.getProfilesAsync() : Promise.resolve(storage.getProfiles()),
             Promise.resolve(storage.getSettings())
           ]);
           
           set({ mcps, profiles, settings });
+          
+          // Initialize default profile if needed and there are MCPs
+          if (profiles.length === 0 && mcps.length > 0) {
+            await get().createProfile({
+              name: 'Default Profile',
+              description: 'Automatically created default profile with all your MCPs',
+              mcpIds: mcps.map(mcp => mcp.id),
+              isDefault: true
+            });
+          }
+          
+          // Set default profile if specified in settings
+          if (settings.defaultProfile && profiles.length > 0) {
+            const defaultProfile = profiles.find(p => p.id === settings.defaultProfile);
+            if (defaultProfile) {
+              set({ selectedProfile: defaultProfile });
+            }
+          }
         } catch (error) {
           set({ error: (error as Error).message });
         } finally {
@@ -623,7 +812,7 @@ export const useMCPStore = create<MCPStore>()(
           const { mcps, profiles, settings } = get();
           await Promise.all([
             storage.saveMCPs(mcps),
-            Promise.resolve(storage.saveProfiles(profiles)),
+            storage.saveProfilesAsync ? storage.saveProfilesAsync(profiles) : Promise.resolve(storage.saveProfiles(profiles)),
             Promise.resolve(storage.saveSettings(settings))
           ]);
         } catch (error) {
