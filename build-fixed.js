@@ -37,9 +37,23 @@ try {
   try {
     await Bun.$`bunx postcss src/index.css -o dist/index.css`;
     console.log('✅ CSS processed with Tailwind');
+    
+    // Remove main.css to avoid confusion - we only need index.css
+    try {
+      await Bun.$`rm -f dist/main.css`;
+    } catch {}
   } catch (error) {
-    console.log('⚠️  PostCSS failed, copying basic CSS...');
-    await Bun.$`cp src/index.css dist/index.css`;
+    console.log('⚠️  PostCSS failed, trying alternative build...');
+    // Try with Vite build as fallback
+    try {
+      await Bun.$`npx vite build --outDir dist-temp`;
+      await Bun.$`cp dist-temp/assets/*.css dist/index.css`;
+      await Bun.$`rm -rf dist-temp`;
+      console.log('✅ CSS built with Vite fallback');
+    } catch (viteError) {
+      console.log('⚠️  Both PostCSS and Vite failed, copying basic CSS...');
+      await Bun.$`cp src/index.css dist/index.css`;
+    }
   }
 
   // Update HTML file to point to built files
