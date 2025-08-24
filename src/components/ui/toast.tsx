@@ -40,7 +40,7 @@ export function Toast({ title, description, type = 'info', duration = 5000, onCl
 
   return (
     <div className={cn(
-      "fixed top-4 right-4 z-50 w-96 rounded-lg border p-4 shadow-lg",
+      "fixed bottom-4 right-4 z-50 w-96 rounded-lg border p-4 shadow-lg",
       toastStyles[type]
     )}>
       <div className="flex items-start gap-3">

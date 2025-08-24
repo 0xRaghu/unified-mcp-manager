@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { X, Plus, FileText, Upload } from "lucide-react"
+import { X, Plus, FileText, Upload, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -21,16 +22,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useMCPStore } from "@/stores/mcpStore"
 import type { MCP } from "@/types"
 
 interface MCPFormProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   mcp?: MCP
-  onSave: (mcp: Omit<MCP, 'id'>) => void
+  onSave: (mcp: Omit<MCP, 'id'>, selectedProfileIds?: string[]) => void
 }
 
 export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
+  const { profiles } = useMCPStore()
   const [formData, setFormData] = React.useState({
     name: '',
     command: '',
@@ -43,6 +46,7 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
     headers: [{ key: '', value: '' }],
     alwaysAllow: ['']
   })
+  const [selectedProfiles, setSelectedProfiles] = React.useState<string[]>([])
   const [jsonInput, setJsonInput] = React.useState('')
   const [jsonMode, setJsonMode] = React.useState(false)
 
@@ -77,6 +81,20 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
         headers: [{ key: '', value: '' }],
         alwaysAllow: ['']
       })
+      
+      // Smart defaults for profile selection when creating new MCPs
+      if (!mcp && profiles.length > 0) {
+        // Auto-select default profile if it exists
+        const defaultProfile = profiles.find(p => p.isDefault)
+        if (defaultProfile) {
+          setSelectedProfiles([defaultProfile.id])
+        } else {
+          // Otherwise, select no profiles by default to let user choose
+          setSelectedProfiles([])
+        }
+      } else {
+        setSelectedProfiles([])
+      }
     }
     setJsonInput('')
     setJsonMode(false)
@@ -195,7 +213,7 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
       alwaysAllow: alwaysAllowArray.length > 0 ? alwaysAllowArray : undefined,
     }
     
-    onSave(mcpData)
+    onSave(mcpData, selectedProfiles)
     onOpenChange(false)
   }
 
@@ -285,6 +303,23 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
         i === index ? { ...header, [field]: value } : header
       )
     }))
+  }
+
+  // Simple profile selection handlers without complex memoization
+  const handleSelectAllProfiles = () => {
+    setSelectedProfiles(profiles.map(p => p.id))
+  }
+
+  const handleSelectNoneProfiles = () => {
+    setSelectedProfiles([])
+  }
+
+  const handleProfileToggle = (profileId: string) => {
+    setSelectedProfiles(prev => 
+      prev.includes(profileId) 
+        ? prev.filter(id => id !== profileId)
+        : [...prev, profileId]
+    )
   }
 
   return (
@@ -509,6 +544,82 @@ export function MCPForm({ open, onOpenChange, mcp, onSave }: MCPFormProps) {
                 ))}
               </div>
             </div>
+
+            {profiles.length > 0 && (
+              <div className="space-y-4">
+                <div className="border-t pt-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      <Label className="text-base font-medium">Add to Profiles</Label>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSelectAllProfiles}
+                        disabled={selectedProfiles.length === profiles.length}
+                        className="text-xs"
+                      >
+                        Select All
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSelectNoneProfiles}
+                        disabled={selectedProfiles.length === 0}
+                        className="text-xs"
+                      >
+                        Select None
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-48 overflow-y-auto">
+                    {profiles.map((profile) => {
+                      const isSelected = selectedProfiles.includes(profile.id)
+                      const mcpCount = profile.mcpIds.length
+                      return (
+                        <div
+                          key={profile.id}
+                          className="flex items-start sm:items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          <Checkbox
+                            id={`profile-${profile.id}`}
+                            checked={isSelected}
+                            onCheckedChange={() => handleProfileToggle(profile.id)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <Label
+                                htmlFor={`profile-${profile.id}`}
+                                className="text-sm font-medium cursor-pointer truncate"
+                              >
+                                {profile.name}
+                              </Label>
+                              <span className="text-xs text-gray-500 ml-2">
+                                {mcpCount} MCP{mcpCount !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            {profile.description && (
+                              <p className="text-xs text-gray-500 mt-1 truncate">
+                                {profile.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {selectedProfiles.length > 0 && (
+                    <p className="text-xs text-gray-600 mt-2">
+                      This MCP will be added to {selectedProfiles.length} profile{selectedProfiles.length !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

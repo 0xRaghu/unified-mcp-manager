@@ -13,7 +13,8 @@ import {
   Copy,
   Wifi,
   WifiOff,
-  AlertCircle
+  AlertCircle,
+  Save
 } from 'lucide-react';
 import { useMCPStore } from './stores/mcpStore';
 import type { MCP } from './types';
@@ -29,9 +30,13 @@ import {
 import { copyToClipboard, downloadAsFile, convertToYaml } from './lib/utils';
 import { MCPForm } from './components/MCPForm';
 import { BulkImportDialog } from './components/BulkImportDialog';
+import { ProfileDropdown } from './components/ProfileDropdown';
+import { ProfileDialog } from './components/ProfileDialog';
+import { ProfileManager } from './components/ProfileManager';
 import { useToast } from './components/ui/toast';
 import { testMCPConnection } from './lib/mcpTester';
 import { Switch } from './components/ui/switch';
+import type { Profile } from './types';
 
 // Utility function to process items in batches
 async function processBatch<T, R>(
@@ -66,11 +71,15 @@ function App() {
     exportMCPs,
     setFilters,
     addMCP,
+    addMCPToProfiles,
     updateMCP,
     deleteMCP,
     duplicateMCP,
     toggleMCP,
-    bulkToggleMCPs
+    bulkToggleMCPs,
+    selectedProfile,
+    hasUnsavedProfileChanges,
+    saveCurrentStateToProfile
   } = useMCPStore();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -78,6 +87,13 @@ function App() {
   const [editingMCP, setEditingMCP] = useState<MCP | undefined>(undefined);
   const [testingMCP, setTestingMCP] = useState<string | null>(null);
   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'connected' | 'disconnected' | 'testing'>>({});
+  
+  // Profile state
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
+  const [isProfileManagerOpen, setIsProfileManagerOpen] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<Profile | undefined>(undefined);
+  const [profileDialogMode, setProfileDialogMode] = useState<'create' | 'edit'>('create');
+  
   const { showToast } = useToast();
   
   useEffect(() => {
@@ -140,9 +156,22 @@ function App() {
     return result;
   }, [getFilteredMCPs, mcps, filters]);
   const activeMCPs = useMemo(() => mcps.filter(mcp => !mcp.disabled).length, [mcps]);
+  
+  // Profile-aware export (exports only MCPs from active profile)
+  const handleProfileAwareExport = () => {
+    const { selectedProfile } = useMCPStore.getState();
+    if (selectedProfile) {
+      // Export only MCPs in the current profile
+      const profileMCPIds = selectedProfile.mcpIds;
+      return exportMCPs(profileMCPIds);
+    } else {
+      // Export all enabled MCPs
+      return exportMCPs();
+    }
+  };
 
   const handleExportJSON = async () => {
-    const exported = exportMCPs();
+    const exported = handleProfileAwareExport();
     const jsonString = JSON.stringify(exported, null, 2);
     const success = await copyToClipboard(jsonString);
     
@@ -155,14 +184,18 @@ function App() {
   };
 
   const handleDownloadJSON = () => {
-    const exported = exportMCPs();
+    const exported = handleProfileAwareExport();
     const jsonString = JSON.stringify(exported, null, 2);
-    downloadAsFile(jsonString, 'mcp-config.json', 'application/json');
+    const { selectedProfile } = useMCPStore.getState();
+    const filename = selectedProfile 
+      ? `${selectedProfile.name.toLowerCase().replace(/\s+/g, '-')}-config.json`
+      : 'mcp-config.json';
+    downloadAsFile(jsonString, filename, 'application/json');
   };
 
   const handleExportYAML = async () => {
     try {
-      const exported = exportMCPs();
+      const exported = handleProfileAwareExport();
       const yamlString = convertToYaml(exported);
       const success = await copyToClipboard(yamlString);
       
@@ -184,9 +217,13 @@ function App() {
 
   const handleDownloadYAML = () => {
     try {
-      const exported = exportMCPs();
+      const exported = handleProfileAwareExport();
       const yamlString = convertToYaml(exported);
-      downloadAsFile(yamlString, 'mcp-config.yaml', 'application/x-yaml');
+      const { selectedProfile } = useMCPStore.getState();
+      const filename = selectedProfile 
+        ? `${selectedProfile.name.toLowerCase().replace(/\s+/g, '-')}-config.yaml`
+        : 'mcp-config.yaml';
+      downloadAsFile(yamlString, filename, 'application/x-yaml');
     } catch (error) {
       showToast({
         title: 'Download failed',
@@ -207,11 +244,35 @@ function App() {
     setIsFormOpen(true);
   };
 
-  const handleSaveMCP = (mcpData: Omit<MCP, 'id'>) => {
-    if (editingMCP) {
-      updateMCP(editingMCP.id, mcpData);
-    } else {
-      addMCP(mcpData);
+  const handleSaveMCP = async (mcpData: Omit<MCP, 'id'>, selectedProfileIds?: string[]) => {
+    try {
+      if (editingMCP) {
+        // Update existing MCP
+        await updateMCP(editingMCP.id, mcpData);
+        
+        // Handle profile updates for edited MCPs
+        if (selectedProfileIds && selectedProfileIds.length > 0) {
+          const { profiles, updateProfile } = useMCPStore.getState();
+          
+          const updatePromises = selectedProfileIds.map(async (profileId) => {
+            const profile = profiles.find(p => p.id === profileId);
+            if (profile && !profile.mcpIds.includes(editingMCP.id)) {
+              await updateProfile(profileId, {
+                mcpIds: [...profile.mcpIds, editingMCP.id],
+                updatedAt: new Date()
+              });
+            }
+          });
+          
+          await Promise.all(updatePromises);
+        }
+      } else {
+        // Create new MCP with profile assignments
+        await addMCPToProfiles(mcpData, selectedProfileIds);
+      }
+    } catch (error) {
+      console.error('Error saving MCP:', error);
+      // You might want to show a toast or error message here
     }
   };
 
@@ -337,6 +398,70 @@ function App() {
     setConnectionStatuses(prev => ({ ...prev, ...finalStatuses }));
   };
 
+  // Profile handlers
+  const handleCreateProfile = () => {
+    setEditingProfile(undefined);
+    setProfileDialogMode('create');
+    setIsProfileDialogOpen(true);
+  };
+
+  const handleEditProfile = (profile: Profile) => {
+    setEditingProfile(profile);
+    setProfileDialogMode('edit');
+    setIsProfileDialogOpen(true);
+  };
+
+  const handleDeleteProfile = async (profile: Profile) => {
+    if (confirm(`Are you sure you want to delete "${profile.name}"? This action cannot be undone.`)) {
+      try {
+        const { deleteProfile, selectedProfile, setActiveProfile } = useMCPStore.getState();
+        await deleteProfile(profile.id);
+        
+        // Clear active profile if it was deleted
+        if (selectedProfile?.id === profile.id) {
+          setActiveProfile(null);
+        }
+        
+        showToast({
+          title: 'Profile deleted',
+          description: `${profile.name} has been deleted successfully`,
+          type: 'success',
+          duration: 3000
+        });
+      } catch (error) {
+        showToast({
+          title: 'Failed to delete profile',
+          description: (error as Error).message,
+          type: 'error',
+          duration: 5000
+        });
+      }
+    }
+  };
+
+  const handleManageProfiles = () => {
+    setIsProfileManagerOpen(true);
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      await saveCurrentStateToProfile();
+      showToast({
+        title: 'Profile saved',
+        description: `${selectedProfile?.name} has been updated with current MCP states`,
+        type: 'success',
+        duration: 3000
+      });
+    } catch (error) {
+      showToast({
+        title: 'Failed to save profile',
+        description: (error as Error).message,
+        type: 'error',
+        duration: 5000
+      });
+    }
+  };
+
 
   const handleTestConnection = async (mcp: MCP) => {
     setTestingMCP(mcp.id);
@@ -418,6 +543,23 @@ function App() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
+            <ProfileDropdown
+              onCreateProfile={handleCreateProfile}
+              onManageProfiles={handleManageProfiles}
+              onEditProfile={handleEditProfile}
+              onDeleteProfile={handleDeleteProfile}
+            />
+            {selectedProfile && hasUnsavedProfileChanges() && (
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={handleSaveProfile}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Save Profile
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={handleRefresh}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
@@ -680,6 +822,20 @@ function App() {
       <BulkImportDialog
         open={isBulkImportOpen}
         onOpenChange={setIsBulkImportOpen}
+      />
+
+      <ProfileDialog
+        open={isProfileDialogOpen}
+        onOpenChange={setIsProfileDialogOpen}
+        profile={editingProfile}
+        mode={profileDialogMode}
+      />
+
+      <ProfileManager
+        open={isProfileManagerOpen}
+        onOpenChange={setIsProfileManagerOpen}
+        onCreateProfile={handleCreateProfile}
+        onEditProfile={handleEditProfile}
       />
 
       {/* Footer */}

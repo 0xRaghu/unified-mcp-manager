@@ -32,6 +32,7 @@ MCP Manager provides a centralized web UI where you can:
 - ✅ **Duplicate & edit** existing configurations
 - ✅ **Search & filter** through your MCP collection
 - ✅ **Bulk import** MCPs from JSON configuration files
+- ✅ **Profile management** with custom MCP collections for different use cases
 - ✅ **Secure storage** with encryption for sensitive environment variables
 
 ## 🚀 Quick Start
@@ -92,6 +93,29 @@ bun run build
 - **Test Connection**: Verify the MCP server is working
 - **Delete**: Remove with confirmation dialog
 
+### Profile Management
+
+Create and manage different MCP profiles for different use cases:
+
+#### Creating Profiles
+1. Click **"Manage Profiles"** in the header
+2. Click **"Create Profile"** 
+3. Enter profile name (or use auto-generated names like "Profile 1")
+4. Select which MCPs to include in this profile
+5. Optionally mark as default profile
+
+#### Using Profiles
+- **Switch Profiles**: Use the profile dropdown in the header to switch between profiles
+- **Profile Filtering**: When a profile is active, only its MCPs are shown and exported
+- **MCP Count Display**: Each profile shows how many MCPs it contains
+- **All MCPs Mode**: Select "All MCPs" to disable profile filtering
+
+#### Profile Features
+- **Export Profile-Specific Config**: JSON exports only include MCPs from the active profile
+- **Import/Export Profiles**: Backup and restore entire profiles with their MCP configurations
+- **Default Profile**: Automatically created with all MCPs when first launching the app
+- **Custom Names**: Create meaningful profile names like "React Development", "Backend Tools", etc.
+
 ### Importing & Exporting Configurations
 
 #### Bulk Import
@@ -101,8 +125,9 @@ bun run build
 - **Format Support**: Compatible with any JSON file containing an `mcpServers` object
 
 #### Export Options
-- **Copy JSON**: Copies configuration to clipboard
-- **Download**: Downloads as `mcp-config.json` file
+- **Copy JSON**: Copies configuration to clipboard (filtered by active profile)
+- **Download**: Downloads as `mcp-config.json` file (or `profile-name-config.json` when profile is active)
+- **Export Profiles**: Backup entire profiles with their MCP configurations
 
 The exported format is compatible with all major AI coding agents:
 
@@ -181,6 +206,7 @@ The exported format is compatible with all major AI coding agents:
 
 #### ⚡ Advanced Features
 - **Bulk Import System**: Upload JSON files with drag-and-drop support and intelligent duplicate detection
+- **Profile Management**: Create, edit, and manage MCP profiles for different use cases (React, Backend, Database, etc.)
 - **Auto-refresh functionality**: Keep MCP status up to date
 - **Real-time status updates**: Live connection monitoring
 - **Connection timeout handling**: Graceful handling of unresponsive MCPs
@@ -352,10 +378,10 @@ localStorage.setItem('mcp-debug', 'true')
 ## 🗺️ Roadmap
 
 ### Planned Features
-- **Profiles**: Create and manage different MCP configuration profiles for different projects
 - **Categorization**: Organize MCPs into categories (Development, Security, Data, etc.)
 - **Dark Mode**: Enhanced dark theme with system preference detection
 - **Backup & Sync**: Cloud backup and synchronization across devices
+- **Profile Templates**: Pre-configured profile templates for common use cases
 
 ### Contributing
 We welcome contributions! Pick any roadmap item or suggest new features via GitHub issues.

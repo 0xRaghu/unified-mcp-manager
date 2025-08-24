@@ -18,6 +18,9 @@ import { DEFAULT_SETTINGS } from '../types';
 // Browser-compatible storage adapters
 class ApiStorageAdapter implements StorageAdapter {
   private baseUrl: string;
+  private profilesCache: Profile[] | null = null;
+  private profilesCacheTime = 0;
+  private readonly CACHE_TTL = 5000; // 5 seconds
 
   constructor(baseUrl: string = '') {
     this.baseUrl = baseUrl;
@@ -67,15 +70,64 @@ class ApiStorageAdapter implements StorageAdapter {
   }
 
   getProfiles(): Profile[] {
-    return [];
+    // Return cached profiles if available and fresh
+    const now = Date.now();
+    if (this.profilesCache && (now - this.profilesCacheTime) < this.CACHE_TTL) {
+      return this.profilesCache;
+    }
+    
+    // Otherwise return empty array and trigger async load
+    this.getProfilesAsync().then(profiles => {
+      this.profilesCache = profiles;
+      this.profilesCacheTime = Date.now();
+    }).catch(console.error);
+    
+    return this.profilesCache || [];
+  }
+
+  async getProfilesAsync(): Promise<Profile[]> {
+    try {
+      const profiles = await this.apiCall<Profile[]>('/profiles');
+      // Convert date strings back to Date objects
+      const result = profiles.map(profile => ({
+        ...profile,
+        createdAt: new Date(profile.createdAt),
+        updatedAt: new Date(profile.updatedAt)
+      }));
+      
+      // Update cache
+      this.profilesCache = result;
+      this.profilesCacheTime = Date.now();
+      
+      return result;
+    } catch (error) {
+      console.error('Failed to load profiles:', error);
+      return [];
+    }
   }
 
   saveProfiles(profiles: Profile[]): void {
-    // Fire and forget
+    // Update cache immediately
+    this.profilesCache = profiles;
+    this.profilesCacheTime = Date.now();
+    
+    // Fire and forget API save
     this.apiCall('/profiles', {
       method: 'POST',
       body: JSON.stringify(profiles)
     }).catch(console.error);
+  }
+
+  async saveProfilesAsync(profiles: Profile[]): Promise<void> {
+    // Update cache immediately
+    this.profilesCache = profiles;
+    this.profilesCacheTime = Date.now();
+    
+    // API save with await
+    await this.apiCall('/profiles', {
+      method: 'POST',
+      body: JSON.stringify(profiles)
+    });
   }
 
   getSettings(): AppSettings {
@@ -286,11 +338,42 @@ class StorageManager {
   }
 
   /**
+   * Get all profiles from storage (async version)
+   */
+  async getProfilesAsync(): Promise<Profile[]> {
+    try {
+      if (this.adapter instanceof ApiStorageAdapter) {
+        return await this.adapter.getProfilesAsync();
+      }
+      return this.adapter.getProfiles();
+    } catch (error) {
+      console.error('Failed to get profiles from storage:', error);
+      return [];
+    }
+  }
+
+  /**
    * Save profiles to storage
    */
   saveProfiles(profiles: Profile[]): void {
     try {
       this.adapter.saveProfiles(profiles);
+    } catch (error) {
+      console.error('Failed to save profiles to storage:', error);
+      throw new Error('Failed to save profile data');
+    }
+  }
+
+  /**
+   * Save profiles to storage (async version)
+   */
+  async saveProfilesAsync(profiles: Profile[]): Promise<void> {
+    try {
+      if (this.adapter instanceof ApiStorageAdapter) {
+        await this.adapter.saveProfilesAsync(profiles);
+      } else {
+        this.adapter.saveProfiles(profiles);
+      }
     } catch (error) {
       console.error('Failed to save profiles to storage:', error);
       throw new Error('Failed to save profile data');
